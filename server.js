@@ -12,7 +12,7 @@ app.use(cors());
 
 const PORT = process.env.PORT || 3000;
 
-// --- SECURITY: GET PASSWORD FROM RENDER ---
+// --- CONFIGURATION ---
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD; 
 
 const EOS_CONFIG = {
@@ -22,12 +22,12 @@ const EOS_CONFIG = {
     apiUrl: 'https://api.epicgames.dev'
 };
 
-// --- CONNECT TO MONGODB ---
+// --- DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ Connected to MongoDB Cloud"))
     .catch(err => console.error("❌ MongoDB Error:", err));
 
-// --- DATA MODEL ---
+// --- PLAYER MODEL ---
 const PlayerSchema = new mongoose.Schema({
     productUserId: { type: String, required: true, unique: true },
     username: String,
@@ -55,15 +55,13 @@ async function getAccessToken() {
     } catch (error) { throw new Error('EOS Auth Failed: ' + error.message); }
 }
 
-// --- SECURITY MIDDLEWARE (THE GATEKEEPER) ---
+// --- SECURITY MIDDLEWARE ---
 const verifyAdminPassword = (req, res, next) => {
     const providedPassword = req.headers['x-admin-auth'];
-    
     if (!ADMIN_PASSWORD) {
-        console.warn("⚠️ WARNING: ADMIN_PASSWORD not set in Render Environment!");
-        return next();
+        console.warn("⚠️ WARNING: ADMIN_PASSWORD not set in Render!");
+        return next(); 
     }
-
     if (providedPassword !== ADMIN_PASSWORD) {
         console.log(`⛔ Unauthorized Access Attempt.`);
         return res.status(403).json({ success: false, error: "WRONG PASSWORD" });
@@ -73,7 +71,7 @@ const verifyAdminPassword = (req, res, next) => {
 
 // ================= ROUTES =================
 
-// 1. TRACK PLAYER (Public - No password needed to log "I am here")
+// 1. TRACK PLAYER
 app.post('/api/players/track', async (req, res) => {
     const { productUserId, username } = req.body;
     if (!productUserId) return res.status(400).json({ error: "Missing ID" });
@@ -87,7 +85,7 @@ app.post('/api/players/track', async (req, res) => {
     } catch (err) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// 2. GET PLAYERS (Secured - Requires Password)
+// 2. GET PLAYERS
 app.get('/api/players', verifyAdminPassword, async (req, res) => {
     try {
         const players = await Player.find().sort({ lastSeen: -1 });
@@ -95,7 +93,7 @@ app.get('/api/players', verifyAdminPassword, async (req, res) => {
     } catch (err) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// 3. BAN PLAYER (Secured - Requires Password)
+// 3. BAN PLAYER (Updated to use your specific keys)
 app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
     try {
         const { productUserId, action, durationSeconds, justification } = req.body;
@@ -103,17 +101,28 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
         if (!productUserId || typeof productUserId !== 'string' || productUserId.trim() === "") {
             return res.status(400).json({ success: false, error: "Missing Product User ID" });
         }
+
         const cleanId = productUserId.trim();
         const accessToken = await getAccessToken();
-        const safeAction = "BAN_GAMEPLAY"; 
+        
+        // FIX: Allow the exact action string you send from Unity (RESTRICT_GAME_ACCESS)
+        // Default to RESTRICT_GAME_ACCESS if nothing is sent.
+        const safeAction = action || "RESTRICT_GAME_ACCESS"; 
 
         const sanctionData = {
-            subjectId: cleanId, action: safeAction,
-            justification: justification || "Manual Ban", source: 'MANUAL', tags: ['banned']
+            subjectId: cleanId, 
+            action: safeAction,
+            justification: justification || "Manual Ban", 
+            source: 'MANUAL', 
+            tags: ['banned']
         };
-        if (durationSeconds > 0) sanctionData.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
+        
+        if (durationSeconds > 0) {
+            sanctionData.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
+        }
 
-        // Send to Epic
+        console.log(`🔨 Processing Ban: ${safeAction} for ${cleanId}`);
+
         const response = await axios({
             method: 'post',
             url: `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions`,
@@ -121,8 +130,12 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
             data: JSON.stringify([sanctionData]) 
         });
 
-        // Update Database
-        await Player.findOneAndUpdate({ productUserId: cleanId }, { isBanned: true }, { upsert: true, new: true, setDefaultsOnInsert: true });
+        await Player.findOneAndUpdate(
+            { productUserId: cleanId }, 
+            { isBanned: true }, 
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        
         res.json({ success: true, data: response.data });
 
     } catch (error) { 
@@ -131,15 +144,19 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
     }
 });
 
-// 4. UNBAN PLAYER (Secured - Requires Password)
+// 4. UNBAN PLAYER
 app.post('/api/sanctions/remove', verifyAdminPassword, async (req, res) => {
      try {
         const { productUserId, referenceId } = req.body;
         const accessToken = await getAccessToken();
+
         if (referenceId) {
-            await axios.delete(`${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions/${referenceId}`,
-                { headers: { 'Authorization': `Bearer ${accessToken}` } });
+            await axios.delete(
+                `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions/${referenceId}`,
+                { headers: { 'Authorization': `Bearer ${accessToken}` } }
+            );
         }
+        
         if (productUserId) {
             await Player.findOneAndUpdate({ productUserId: productUserId }, { isBanned: false });
         }
