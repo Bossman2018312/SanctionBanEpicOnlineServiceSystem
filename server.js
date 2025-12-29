@@ -13,8 +13,7 @@ app.use(cors());
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD; 
 
-// --- ROBUST CONFIGURATION ---
-// We trim() these to ensure no invisible spaces break the API
+// --- CONFIGURATION ---
 const EOS_CONFIG = {
     deploymentId: (process.env.EOS_DEPLOYMENT_ID || "").trim(),
     clientId: (process.env.EOS_CLIENT_ID || "").trim(),
@@ -22,12 +21,11 @@ const EOS_CONFIG = {
     apiUrl: 'https://api.epicgames.dev'
 };
 
-// Check if variables are missing
-if (!EOS_CONFIG.deploymentId || !EOS_CONFIG.clientId) {
-    console.error("❌ CRITICAL ERROR: EOS Variables are missing in Render Environment!");
-}
+// --- 🔍 HEALTH CHECK ROUTE (The Proof) ---
+app.get('/', (req, res) => {
+    res.send(`✅ SERVER IS LIVE! Version: DIAGNOSTIC_V2.0 <br> Active Deployment ID: ${EOS_CONFIG.deploymentId}`);
+});
 
-// --- DATABASE ---
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ Connected to MongoDB"))
     .catch(err => console.error("❌ MongoDB Error:", err));
@@ -42,27 +40,16 @@ const PlayerSchema = new mongoose.Schema({
 });
 const Player = mongoose.model('Player', PlayerSchema);
 
-// --- AUTH HELPER ---
-let tokenCache = { token: null, expiresAt: 0 };
 async function getAccessToken() {
-    if (tokenCache.token && Date.now() < tokenCache.expiresAt) return tokenCache.token;
     try {
-        console.log("🔄 Refreshing EOS Token...");
         const response = await axios.post(
             `${EOS_CONFIG.apiUrl}/auth/v1/oauth/token`,
             new URLSearchParams({ grant_type: 'client_credentials', deployment_id: EOS_CONFIG.deploymentId }),
-            { 
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                auth: { username: EOS_CONFIG.clientId, password: EOS_CONFIG.clientSecret } 
-            }
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              auth: { username: EOS_CONFIG.clientId, password: EOS_CONFIG.clientSecret } }
         );
-        tokenCache.token = response.data.access_token;
-        tokenCache.expiresAt = Date.now() + (response.data.expires_in - 300) * 1000;
-        return tokenCache.token;
-    } catch (error) { 
-        console.error("❌ Auth Failed:", error.response?.data || error.message);
-        throw new Error('EOS Auth Failed'); 
-    }
+        return response.data.access_token;
+    } catch (error) { throw new Error('EOS Auth Failed'); }
 }
 
 const verifyAdminPassword = (req, res, next) => {
@@ -75,7 +62,6 @@ const verifyAdminPassword = (req, res, next) => {
 
 // --- ROUTES ---
 
-// 1. TRACK PLAYER
 app.post('/api/players/track', async (req, res) => {
     const { productUserId, username } = req.body;
     if (!productUserId) return res.status(400).json({ error: "Missing ID" });
@@ -87,25 +73,22 @@ app.post('/api/players/track', async (req, res) => {
     res.json({ success: true });
 });
 
-// 2. GET PLAYERS
 app.get('/api/players', verifyAdminPassword, async (req, res) => {
     const players = await Player.find().sort({ lastSeen: -1 });
     res.json({ success: true, players });
 });
 
-// 3. BAN PLAYER (DEBUG MODE)
+// --- BAN ROUTE ---
 app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
     try {
         const { productUserId, action, durationSeconds, justification } = req.body;
 
         if (!productUserId || productUserId.trim() === "") {
-            return res.status(400).json({ success: false, error: "Missing Product User ID" });
+            return res.status(400).json({ success: false, error: "Missing ID" });
         }
 
         const accessToken = await getAccessToken();
-        
-        // Use exact action from Unity, or default
-        const safeAction = action || "RESTRICT_GAME_ACCESS"; 
+        const safeAction = action; 
         const finalId = productUserId.trim();
 
         const sanctionPayload = {
@@ -120,25 +103,16 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
             sanctionPayload.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
         }
 
-        console.log(`🔨 Processing Ban: Action='${safeAction}' for ID='${finalId}'`);
-        console.log(`📋 Deployment ID: '${EOS_CONFIG.deploymentId}'`);
+        console.log(`🔨 Processing Ban for: ${finalId}`);
 
-        // Send to Epic
         const response = await axios.post(
             `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions`,
             [sanctionPayload], 
-            { 
-                headers: { 
-                    'Authorization': `Bearer ${accessToken}`, 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                } 
-            }
+            { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
         );
 
         console.log("✅ EOS Success!");
 
-        // Update DB
         await Player.findOneAndUpdate(
             { productUserId: finalId }, 
             { isBanned: true }, 
@@ -148,17 +122,15 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
         res.json({ success: true, data: response.data });
 
     } catch (error) { 
-        // --- THE DEBUG FIX ---
-        // If Epic sends an error, we send the WHOLE object back to Unity
-        // This will let you see "Validation Failed" or "Sanction Not Found" in your console.
-        
+        // THIS IS THE NEW ERROR BLOCK.
         const epicError = error.response?.data;
-        console.error("❌ EPIC REJECTED REQUEST:", JSON.stringify(epicError || error.message));
+        console.error("❌ EPIC ERROR:", JSON.stringify(epicError || error.message));
 
         res.status(400).json({ 
             success: false, 
-            error: "EPIC_API_ERROR",
-            details: epicError || error.message // <--- READ THIS IN UNITY CONSOLE
+            error: "EPIC_API_ERROR", // <--- LOOK FOR THIS IN UNITY
+            debugInfo: "DIAGNOSTIC_V2.0", 
+            details: epicError 
         }); 
     }
 });
