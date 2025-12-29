@@ -21,9 +21,9 @@ const EOS_CONFIG = {
     apiUrl: 'https://api.epicgames.dev'
 };
 
-// --- 🔍 HEALTH CHECK ROUTE (The Proof) ---
+// --- HEALTH CHECK ---
 app.get('/', (req, res) => {
-    res.send(`✅ SERVER IS LIVE! Version: DIAGNOSTIC_V2.0 <br> Active Deployment ID: ${EOS_CONFIG.deploymentId}`);
+    res.send(`✅ SERVER IS LIVE! Version: SERIALIZATION_FIX_V3.0`);
 });
 
 mongoose.connect(process.env.MONGODB_URI)
@@ -78,7 +78,7 @@ app.get('/api/players', verifyAdminPassword, async (req, res) => {
     res.json({ success: true, players });
 });
 
-// --- BAN ROUTE ---
+// --- BAN ROUTE (MANUAL STRINGIFY FIX) ---
 app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
     try {
         const { productUserId, action, durationSeconds, justification } = req.body;
@@ -91,7 +91,8 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
         const safeAction = action; 
         const finalId = productUserId.trim();
 
-        const sanctionPayload = {
+        // Create the object
+        const sanctionObject = {
             subjectId: finalId, 
             action: safeAction,
             justification: justification || "Manual Ban", 
@@ -100,15 +101,26 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
         };
         
         if (durationSeconds > 0) {
-            sanctionPayload.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
+            sanctionObject.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
         }
 
+        // --- THE FIX: MANUAL STRINGIFY ---
+        // We put it in an array and turn it into text ourselves to prevent corruption
+        const payloadString = JSON.stringify([sanctionObject]);
+
         console.log(`🔨 Processing Ban for: ${finalId}`);
+        console.log(`📤 Outgoing Payload: ${payloadString}`);
 
         const response = await axios.post(
             `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions`,
-            [sanctionPayload], 
-            { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+            payloadString, 
+            { 
+                headers: { 
+                    'Authorization': `Bearer ${accessToken}`, 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json' 
+                } 
+            }
         );
 
         console.log("✅ EOS Success!");
@@ -122,14 +134,13 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
         res.json({ success: true, data: response.data });
 
     } catch (error) { 
-        // THIS IS THE NEW ERROR BLOCK.
         const epicError = error.response?.data;
         console.error("❌ EPIC ERROR:", JSON.stringify(epicError || error.message));
 
         res.status(400).json({ 
             success: false, 
-            error: "EPIC_API_ERROR", // <--- LOOK FOR THIS IN UNITY
-            debugInfo: "DIAGNOSTIC_V2.0", 
+            error: "EPIC_API_ERROR",
+            debugInfo: "SERIALIZATION_FIX_V3.0", 
             details: epicError 
         }); 
     }
