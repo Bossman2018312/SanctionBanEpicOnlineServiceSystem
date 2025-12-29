@@ -21,13 +21,11 @@ const EOS_CONFIG = {
 };
 
 // --- MONGODB CONNECTION ---
-// Using the connection string from your .env file
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ Connected to MongoDB Cloud"))
     .catch(err => console.error("❌ MongoDB Error:", err));
 
 // --- SCHEMA ---
-// This defines what a "Player" looks like in the database
 const PlayerSchema = new mongoose.Schema({
     productUserId: { type: String, required: true, unique: true },
     username: String,
@@ -38,15 +36,12 @@ const PlayerSchema = new mongoose.Schema({
 });
 const Player = mongoose.model('Player', PlayerSchema);
 
-// --- HELPER: GET EPIC ACCESS TOKEN ---
+// --- AUTH HELPER ---
 let tokenCache = { token: null, expiresAt: 0 };
 
 async function getAccessToken() {
-    // Return cached token if it's still valid
     if (tokenCache.token && Date.now() < tokenCache.expiresAt) return tokenCache.token;
-    
     try {
-        console.log("🔄 Refreshing EOS Access Token...");
         const response = await axios.post(
             `${EOS_CONFIG.apiUrl}/auth/v1/oauth/token`,
             new URLSearchParams({ 
@@ -61,124 +56,109 @@ async function getAccessToken() {
                 } 
             }
         );
-        
         tokenCache.token = response.data.access_token;
-        // Expire 5 minutes early to be safe
         tokenCache.expiresAt = Date.now() + (response.data.expires_in - 300) * 1000;
-        console.log("✅ Token Refreshed");
         return tokenCache.token;
-    } catch (error) { 
-        console.error("❌ Auth Failed:", error.response?.data || error.message);
-        throw new Error('EOS Auth Failed'); 
-    }
+    } catch (error) { throw new Error('EOS Auth Failed: ' + error.message); }
 }
 
 // ================= ROUTES =================
 
-// 1. TRACK PLAYER (Logs them when they join)
+// 1. TRACK PLAYER
 app.post('/api/players/track', async (req, res) => {
     const { productUserId, username } = req.body;
-    
     if (!productUserId) return res.status(400).json({ error: "Missing ID" });
 
     try {
-        // "Upsert": Update if exists, Create if new
         let player = await Player.findOneAndUpdate(
             { productUserId: productUserId },
             { 
                 $set: { lastSeen: new Date(), username: username },
-                $addToSet: { aliases: username } // Keep history of names
+                $addToSet: { aliases: username }
             },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
-
-        console.log(`📝 Logged: ${player.username} (${productUserId})`);
+        console.log(`📝 Logged: ${player.username}`);
         res.json({ success: true });
-    } catch (err) {
-        console.error("DB Error:", err);
-        res.status(500).json({ error: "Database error" });
-    }
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
 });
 
-// 2. GET ALL PLAYERS (For your Unity Admin Panel)
+// 2. GET PLAYERS
 app.get('/api/players', async (req, res) => {
     try {
-        // Sort by newest activity first
         const players = await Player.find().sort({ lastSeen: -1 });
         res.json({ success: true, players });
-    } catch (err) { 
-        res.status(500).json({ error: "Database error" }); 
-    }
+    } catch (err) { res.status(500).json({ error: "Database error" }); }
 });
 
-// 3. BAN PLAYER (The Fix for the Validation Error)
+// 3. BAN PLAYER (FIXED LOGIC)
 app.post('/api/sanctions/create', async (req, res) => {
     try {
         const { productUserId, action, durationSeconds, justification } = req.body;
         
-        // --- VALIDATION START ---
+        // VALIDATION
         if (!productUserId || typeof productUserId !== 'string' || productUserId.trim() === "") {
-            console.error("❌ Ban Request Rejected: 'productUserId' is missing or empty.");
             return res.status(400).json({ success: false, error: "Missing Product User ID" });
         }
-        // --- VALIDATION END ---
 
-        console.log(`🔨 Processing Ban for: ${productUserId}`);
+        const cleanId = productUserId.trim();
+        console.log(`🔨 Processing Ban for: ${cleanId}`);
 
         const accessToken = await getAccessToken();
         
-        // Construct the Payload for Epic
+        // FORCE 'BAN_GAMEPLAY' (Default action that always exists)
+        // If we send 'RESTRICT_MATCHMAKING' and it's not configured in the portal, Epic fails.
+        const safeAction = "BAN_GAMEPLAY"; 
+
         const sanctionData = {
-            subjectId: productUserId.trim(), // Ensure no whitespace
-            action: action || "BAN_GAMEPLAY",
+            subjectId: cleanId, 
+            action: safeAction,
             justification: justification || "Manual Ban via Admin Tool", 
             source: 'MANUAL', 
             tags: ['banned']
         };
-        
-        // Add expiration only if a duration was provided
+
+        // Add duration if provided
         if (durationSeconds && durationSeconds > 0) {
             sanctionData.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
         }
 
-        console.log("📤 Sending to Epic:", JSON.stringify(sanctionData));
+        console.log("📤 Sending Payload to Epic...");
 
-        // Call Epic API
-        const response = await axios.post(
-            `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions`, 
-            [sanctionData], // Must be an array
-            { 
-                headers: { 
-                    'Authorization': `Bearer ${accessToken}`, 
-                    'Content-Type': 'application/json' 
-                } 
-            }
-        );
+        // MANUALLY STRINGIFY to ensure array format is perfect
+        const response = await axios({
+            method: 'post',
+            url: `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions`,
+            headers: { 
+                'Authorization': `Bearer ${accessToken}`, 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            data: JSON.stringify([sanctionData]) 
+        });
 
         console.log("✅ Epic Sanction Created");
 
-        // Update MongoDB immediately so the ban persists even if Epic is down later
+        // Update MongoDB
         await Player.findOneAndUpdate(
-            { productUserId: productUserId }, 
+            { productUserId: cleanId }, 
             { isBanned: true }, 
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
-        console.log("✅ MongoDB Record Updated: Banned");
+        console.log("✅ MongoDB Updated");
 
         res.json({ success: true, data: response.data });
 
     } catch (error) { 
-        // Detailed Error Logging
         const apiError = error.response?.data;
-        console.error("❌ Ban Logic Failed:");
+        console.error("❌ Ban Failed:");
         if (apiError) {
-            console.error("   Epic API Error Code:", apiError.errorCode);
-            console.error("   Epic API Message:", apiError.errorMessage);
+            console.error("   Code:", apiError.errorCode);
+            console.error("   Message:", apiError.errorMessage);
             console.error("   Failures:", JSON.stringify(apiError.validationFailures || {}));
         } else {
-            console.error("   Internal Error:", error.message);
+            console.error("   Error:", error.message);
         }
-        
         res.status(500).json({ success: false, error: error.message }); 
     }
 });
@@ -189,27 +169,19 @@ app.post('/api/sanctions/remove', async (req, res) => {
         const { productUserId, referenceId } = req.body;
         const accessToken = await getAccessToken();
 
-        // Remove from Epic (if we have a reference ID)
         if (referenceId) {
-            console.log(`🗑️ Removing Sanction Ref: ${referenceId}`);
             await axios.delete(
                 `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions/${referenceId}`,
                 { headers: { 'Authorization': `Bearer ${accessToken}` } }
             );
         }
         
-        // Always unban in MongoDB
         if (productUserId) {
-            console.log(`🕊️ Unbanning User in DB: ${productUserId}`);
             await Player.findOneAndUpdate({ productUserId: productUserId }, { isBanned: false });
         }
-
+        console.log(`🕊️ Unbanned: ${productUserId}`);
         res.json({ success: true });
-    } catch (error) { 
-        console.error("❌ Unban Failed:", error.response?.data || error.message);
-        res.status(500).json({ success: false, error: error.message }); 
-    }
+    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Start the server
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
