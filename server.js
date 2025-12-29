@@ -12,6 +12,7 @@ app.use(cors());
 
 const PORT = process.env.PORT || 3000;
 
+// --- CONFIGURATION ---
 const EOS_CONFIG = {
     deploymentId: process.env.EOS_DEPLOYMENT_ID,
     clientId: process.env.EOS_CLIENT_ID,
@@ -22,7 +23,7 @@ const EOS_CONFIG = {
 const EXPECTED_KEY = "ilikemath"; 
 let tokenCache = { token: null, expiresAt: 0 };
 
-// --- CONNECT TO MONGODB ---
+// --- MONGODB CONNECTION ---
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ Connected to MongoDB Cloud"))
     .catch(err => console.error("❌ MongoDB Error:", err));
@@ -54,28 +55,30 @@ async function getAccessToken() {
     } catch (error) { throw new Error('EOS Auth Failed'); }
 }
 
-// --- ROUTES ---
+// ================= ROUTES =================
 
-// 1. TRACK PLAYER
+// 1. TRACK PLAYER (Upsert logic)
 app.post('/api/players/track', async (req, res) => {
     const { productUserId, username } = req.body;
     if (!productUserId) return res.status(400).json({ error: "Missing ID" });
 
     try {
-        let player = await Player.findOne({ productUserId });
-        if (player) {
-            player.lastSeen = new Date();
-            if (username && player.username !== username) {
-                if (!player.aliases.includes(player.username)) player.aliases.push(player.username);
-                player.username = username;
-            }
-            await player.save();
-        } else {
-            await Player.create({ productUserId, username: username || "Unknown", aliases: [] });
-        }
-        console.log(`📝 Logged: ${username || productUserId}`);
+        // Find and update, or create if new (upsert: true)
+        let player = await Player.findOneAndUpdate(
+            { productUserId },
+            { 
+                $set: { lastSeen: new Date(), username: username },
+                $addToSet: { aliases: username } // Adds username to history if unique
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        console.log(`📝 Logged: ${player.username}`);
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Database error" }); }
+    } catch (err) {
+        console.error("DB Error:", err);
+        res.status(500).json({ error: "Database error" });
+    }
 });
 
 // 2. GET PLAYERS
@@ -86,27 +89,46 @@ app.get('/api/players', async (req, res) => {
     } catch (err) { res.status(500).json({ error: "Database error" }); }
 });
 
-// 3. BAN
+// 3. BAN PLAYER (The Fix)
 app.post('/api/sanctions/create', async (req, res) => {
     try {
         const { productUserId, action, durationSeconds, justification } = req.body;
+        console.log(`🔨 Attempting to ban: ${productUserId}`);
+
         const accessToken = await getAccessToken();
         
+        // 1. Send Ban to Epic Online Services
         const sanctionObject = {
-            subjectId: productUserId, action: action || "BAN_GAMEPLAY",
-            justification: justification || "Manual Ban", source: 'MANUAL', tags: ['banned']
+            subjectId: productUserId, 
+            action: action || "BAN_GAMEPLAY",
+            justification: justification || "Manual Ban", 
+            source: 'MANUAL', 
+            tags: ['banned']
         };
         if (durationSeconds > 0) sanctionObject.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
 
         const response = await axios.post(`${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions`, [sanctionObject], 
             { headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' } });
 
-        await Player.findOneAndUpdate({ productUserId }, { isBanned: true });
+        console.log("✅ EOS Sanction Success");
+
+        // 2. FORCE Save to MongoDB (Upsert: Create if doesn't exist)
+        await Player.findOneAndUpdate(
+            { productUserId }, 
+            { isBanned: true }, 
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        console.log("✅ MongoDB Updated: Banned = True");
+
         res.json({ success: true, data: response.data });
-    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+
+    } catch (error) { 
+        console.error("❌ Ban Failed:", error.response?.data || error.message);
+        res.status(500).json({ success: false, error: error.message }); 
+    }
 });
 
-// 4. UNBAN
+// 4. UNBAN PLAYER
 app.post('/api/sanctions/remove', async (req, res) => {
      try {
         const accessToken = await getAccessToken();
@@ -116,6 +138,7 @@ app.post('/api/sanctions/remove', async (req, res) => {
         if (req.body.productUserId) {
             await Player.findOneAndUpdate({ productUserId: req.body.productUserId }, { isBanned: false });
         }
+        console.log(`🕊️ Unbanned: ${req.body.productUserId}`);
         res.json({ success: true });
     } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
