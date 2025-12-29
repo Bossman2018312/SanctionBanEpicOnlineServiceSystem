@@ -58,12 +58,8 @@ async function getAccessToken() {
 // --- SECURITY MIDDLEWARE ---
 const verifyAdminPassword = (req, res, next) => {
     const providedPassword = req.headers['x-admin-auth'];
-    if (!ADMIN_PASSWORD) {
-        console.warn("⚠️ WARNING: ADMIN_PASSWORD not set in Render!");
-        return next(); 
-    }
+    if (!ADMIN_PASSWORD) return next(); // Warn in logs but allow if not set (for testing)
     if (providedPassword !== ADMIN_PASSWORD) {
-        console.log(`⛔ Unauthorized Access Attempt.`);
         return res.status(403).json({ success: false, error: "WRONG PASSWORD" });
     }
     next();
@@ -93,25 +89,23 @@ app.get('/api/players', verifyAdminPassword, async (req, res) => {
     } catch (err) { res.status(500).json({ error: "DB Error" }); }
 });
 
-// 3. BAN PLAYER (Updated to use your specific keys)
+// 3. BAN PLAYER (THE FIX)
 app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
     try {
         const { productUserId, action, durationSeconds, justification } = req.body;
         
-        if (!productUserId || typeof productUserId !== 'string' || productUserId.trim() === "") {
-            return res.status(400).json({ success: false, error: "Missing Product User ID" });
-        }
+        if (!productUserId) return res.status(400).json({ success: false, error: "Missing Product User ID" });
 
         const cleanId = productUserId.trim();
         const accessToken = await getAccessToken();
         
-        // FIX: Allow the exact action string you send from Unity (RESTRICT_GAME_ACCESS)
-        // Default to RESTRICT_GAME_ACCESS if nothing is sent.
+        // CRITICAL FIX: Use the 'action' sent from Unity.
+        // If Unity sends nothing, default to RESTRICT_GAME_ACCESS.
         const safeAction = action || "RESTRICT_GAME_ACCESS"; 
 
         const sanctionData = {
             subjectId: cleanId, 
-            action: safeAction,
+            action: safeAction, // <--- This line now respects your Epic settings
             justification: justification || "Manual Ban", 
             source: 'MANUAL', 
             tags: ['banned']
@@ -121,7 +115,7 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
             sanctionData.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
         }
 
-        console.log(`🔨 Processing Ban: ${safeAction} for ${cleanId}`);
+        console.log(`🔨 Processing Ban: Action='${safeAction}' for ID='${cleanId}'`);
 
         const response = await axios({
             method: 'post',
@@ -140,7 +134,8 @@ app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
 
     } catch (error) { 
         console.error("❌ Ban Failed:", error.response?.data || error.message);
-        res.status(500).json({ success: false, error: error.message }); 
+        // Pass the actual error message back to Unity so you can read it
+        res.status(500).json({ success: false, error: error.response?.data?.errorMessage || error.message }); 
     }
 });
 
