@@ -18,7 +18,7 @@ const PlayerSchema = new mongoose.Schema({
     productUserId: { type: String, required: true, unique: true },
     username: String,
     aliases: [String],
-    firstSeen: { type: Date, default: Date.now }, // Creation Time
+    firstSeen: { type: Date, default: Date.now },
     lastSeen: { type: Date, default: Date.now },
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: "" },
@@ -34,7 +34,6 @@ const verifyAdmin = (req, res, next) => {
     next();
 };
 
-// HELPER: CHECK EXPIRY
 async function checkExpirations() {
     const now = new Date();
     await Player.updateMany(
@@ -43,46 +42,40 @@ async function checkExpirations() {
     );
 }
 
-// 1. TRACK PLAYER (Preserves Creation Time)
+// 1. TRACK PLAYER (Fixed Duplicates)
 app.post('/api/players/track', async (req, res) => {
     try {
         const { productUserId, username, sheckles, scrap } = req.body;
         if (!productUserId) return res.status(400).json({ error: "No ID" });
 
-        await checkExpirations(); // Check if this player's ban expired just now
+        await checkExpirations();
 
-        let player = await Player.findOne({ productUserId });
+        // Use updateOne with upsert to prevent duplicates
+        const updateData = {
+            username: username,
+            lastSeen: new Date(),
+            $addToSet: { aliases: username } // Only add alias if unique
+        };
+        
+        if (sheckles !== undefined) updateData.sheckles = sheckles;
+        if (scrap !== undefined) updateData.scrap = scrap;
 
-        if (!player) {
-            player = new Player({ 
-                productUserId, 
-                username, 
-                aliases: [username], 
-                sheckles: sheckles || 0, 
-                scrap: scrap || 0,
-                firstSeen: new Date() // Set ONLY once
-            });
-        } else {
-            player.username = username;
-            player.lastSeen = new Date();
-            if (!player.aliases.includes(username)) player.aliases.push(username);
-            if (sheckles !== undefined) player.sheckles = sheckles;
-            if (scrap !== undefined) player.scrap = scrap;
-        }
-        await player.save();
+        const player = await Player.findOneAndUpdate(
+            { productUserId },
+            updateData,
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
 
         res.json({ success: true, isBanned: player.isBanned });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. GET PLAYERS (Auto-updates expired bans before sending list)
 app.get('/api/players', verifyAdmin, async (req, res) => {
-    await checkExpirations(); // Fixes "Timed ban didn't revoke"
+    await checkExpirations();
     const players = await Player.find().sort({ lastSeen: -1 });
     res.json({ success: true, players });
 });
 
-// 3. BAN (Increments count)
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     try {
         const { productUserId, reason, durationMinutes } = req.body;
@@ -96,9 +89,9 @@ app.post('/api/ban', verifyAdmin, async (req, res) => {
             { productUserId },
             { 
                 isBanned: true, 
-                banReason: reason || "Admin Ban",
+                banReason: reason || "Admin Ban", 
                 banExpiresAt: expireDate,
-                $inc: { banCount: 1 }
+                $inc: { banCount: 1 } 
             },
             { upsert: true }
         );
@@ -106,10 +99,17 @@ app.post('/api/ban', verifyAdmin, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 4. UNBAN (Fixed Revoke)
 app.post('/api/unban', verifyAdmin, async (req, res) => {
     await Player.findOneAndUpdate({ productUserId: req.body.productUserId }, { isBanned: false, banReason: "", banExpiresAt: null });
     res.json({ success: true });
+});
+
+// NEW: DELETE USER ROUTE
+app.post('/api/delete', verifyAdmin, async (req, res) => {
+    try {
+        await Player.findOneAndDelete({ productUserId: req.body.productUserId });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
