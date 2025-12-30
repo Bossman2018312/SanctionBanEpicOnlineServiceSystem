@@ -17,10 +17,9 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => console.log("✅ MongoDB Connected"))
     .catch(err => console.error("❌ MongoDB Fail:", err));
 
-// LOOSE SCHEMA: Allows both 'productUserId' and 'playerId'
 const PlayerSchema = new mongoose.Schema({
-    productUserId: String, // New Script
-    playerId: String,      // Old Script (Backwards Compatibility)
+    productUserId: String, 
+    playerId: String,      
     username: String,
     aliases: [String],
     firstSeen: { type: Date, default: Date.now },
@@ -31,7 +30,7 @@ const PlayerSchema = new mongoose.Schema({
     banCount: { type: Number, default: 0 },
     sheckles: { type: Number, default: 0 },
     scrap: { type: Number, default: 0 }
-}, { strict: false }); // Allow extra fields like 'coins'
+}, { strict: false }); 
 
 const Player = mongoose.model('Player', PlayerSchema);
 
@@ -40,27 +39,35 @@ const verifyAdmin = (req, res, next) => {
     next();
 };
 
-// 1. GET PLAYERS (THE FIX: Normalizes IDs)
+// AUTO-UNBAN CHECK
+async function checkExpirations() {
+    const now = new Date();
+    await Player.updateMany(
+        { isBanned: true, banExpiresAt: { $ne: null, $lte: now } },
+        { $set: { isBanned: false, banReason: "", banExpiresAt: null } }
+    );
+}
+
+// 1. GET PLAYERS
 app.get('/api/players', verifyAdmin, async (req, res) => {
+    await checkExpirations(); // Check if anyone should be unbanned
+    
     try {
         const rawPlayers = await Player.find().sort({ lastSeen: -1 });
-        
-        // Convert to a clean format for the website
         const players = rawPlayers.map(p => ({
-            productUserId: p.productUserId || p.playerId || "UNKNOWN_ID", // FALLBACK
+            productUserId: p.productUserId || p.playerId || "UNKNOWN_ID",
             username: p.username || "Unknown",
             isBanned: p.isBanned || false,
             banReason: p.banReason || "",
             banExpiresAt: p.banExpiresAt,
-            sheckles: p.sheckles || p.coins || 0, // Handle old 'coins'
+            sheckles: p.sheckles || p.coins || 0,
             scrap: p.scrap || 0,
             firstSeen: p.firstSeen,
-            lastSeen: p.lastSeen
+            lastSeen: p.lastSeen,
+            banCount: p.banCount || 0
         }));
-
-        // Filter out bad data
-        const cleanList = players.filter(p => p.productUserId !== "UNKNOWN_ID" && p.productUserId !== "undefined");
         
+        const cleanList = players.filter(p => p.productUserId !== "UNKNOWN_ID" && p.productUserId !== "undefined");
         res.json({ success: true, players: cleanList });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -71,6 +78,8 @@ app.post('/api/players/track', async (req, res) => {
         let { productUserId, username, sheckles, scrap } = req.body;
         if (!productUserId || productUserId.length < 5) return res.status(400).json({ error: "Invalid ID" });
 
+        await checkExpirations(); // Important: Check bans on login
+
         const updateData = {
             username: username,
             lastSeen: new Date(),
@@ -79,14 +88,12 @@ app.post('/api/players/track', async (req, res) => {
         if (sheckles !== undefined) updateData.sheckles = sheckles;
         if (scrap !== undefined) updateData.scrap = scrap;
 
-        // Try to find by EITHER ID
         const player = await Player.findOneAndUpdate(
             { $or: [{ productUserId: productUserId }, { playerId: productUserId }] },
             updateData,
             { new: true, upsert: true, setDefaultsOnInsert: true }
         );
         
-        // Ensure new ID format is set
         if (!player.productUserId) {
             player.productUserId = productUserId;
             await player.save();
@@ -100,14 +107,21 @@ app.post('/api/players/track', async (req, res) => {
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     const { productUserId, reason, durationMinutes } = req.body;
     let expireDate = null;
-    if (durationMinutes > 0) {
+    
+    // Only set expiry if duration is provided and greater than 0
+    if (durationMinutes && parseInt(durationMinutes) > 0) {
         expireDate = new Date();
         expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
     }
 
     await Player.findOneAndUpdate(
         { $or: [{ productUserId: productUserId }, { playerId: productUserId }] },
-        { isBanned: true, banReason: reason || "Admin Ban", banExpiresAt: expireDate, $inc: { banCount: 1 } }
+        { 
+            isBanned: true, 
+            banReason: reason || "Admin Ban", 
+            banExpiresAt: expireDate, 
+            $inc: { banCount: 1 } 
+        }
     );
     res.json({ success: true });
 });
