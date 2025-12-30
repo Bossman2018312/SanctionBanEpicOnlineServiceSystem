@@ -45,13 +45,13 @@ async function checkExpirations() {
     );
 }
 
-// 1. TRACKING (Strict ID Check)
+// 1. TRACKING (Strict ID Check + No "undefined" allowed)
 app.post('/api/players/track', async (req, res) => {
     try {
         let { productUserId, username, sheckles, scrap } = req.body;
 
-        // STOP GHOSTS: Reject bad IDs
-        if (!productUserId || productUserId === "undefined" || productUserId.length < 5) {
+        // STOP GHOSTS: Reject bad IDs immediately
+        if (!productUserId || productUserId === "undefined" || productUserId.trim().length < 5) {
             return res.status(400).json({ error: "Invalid ID" });
         }
 
@@ -66,7 +66,7 @@ app.post('/api/players/track', async (req, res) => {
         if (sheckles !== undefined) updateData.sheckles = sheckles;
         if (scrap !== undefined) updateData.scrap = scrap;
 
-        // Uses upsert=true because this is the ONLY place valid new players are created
+        // Only create new if ID is valid
         const player = await Player.findOneAndUpdate(
             { productUserId: productUserId },
             updateData,
@@ -79,7 +79,7 @@ app.post('/api/players/track', async (req, res) => {
 
 app.get('/api/players', verifyAdmin, async (req, res) => {
     await checkExpirations();
-    // Filter out bad IDs just in case
+    // Filter out bad IDs from the list before sending to website
     const players = await Player.find({ productUserId: { $ne: "undefined" } }).sort({ lastSeen: -1 });
     res.json({ success: true, players });
 });
