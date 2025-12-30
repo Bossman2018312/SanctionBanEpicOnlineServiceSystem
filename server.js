@@ -18,8 +18,8 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .catch(err => console.error("❌ MongoDB Fail:", err));
 
 const PlayerSchema = new mongoose.Schema({
-    productUserId: String, // New
-    playerId: String,      // Old Support
+    productUserId: String, 
+    playerId: String,      
     username: String,
     aliases: [String],
     firstSeen: { type: Date, default: Date.now },
@@ -30,7 +30,7 @@ const PlayerSchema = new mongoose.Schema({
     banCount: { type: Number, default: 0 },
     sheckles: { type: Number, default: 0 },
     scrap: { type: Number, default: 0 }
-}, { strict: false });
+}, { strict: false }); 
 
 const Player = mongoose.model('Player', PlayerSchema);
 
@@ -42,7 +42,6 @@ const verifyAdmin = (req, res, next) => {
 // AUTO-UNBAN CHECK
 async function checkExpirations() {
     const now = new Date();
-    // Unban anyone whose expiry time has passed
     await Player.updateMany(
         { isBanned: true, banExpiresAt: { $ne: null, $lte: now } },
         { $set: { isBanned: false, banReason: "", banExpiresAt: null } }
@@ -73,7 +72,7 @@ app.get('/api/players', verifyAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. TRACKING
+// 2. TRACKING (FIXED: Ignored "Checking...")
 app.post('/api/players/track', async (req, res) => {
     try {
         let { productUserId, username, sheckles, scrap } = req.body;
@@ -82,10 +81,15 @@ app.post('/api/players/track', async (req, res) => {
         await checkExpirations();
 
         const updateData = {
-            username: username,
-            lastSeen: new Date(),
-            $addToSet: { aliases: username }
+            lastSeen: new Date()
         };
+
+        // FIX: ONLY UPDATE NAME IF IT IS VALID
+        if (username && username !== "Checking..." && username !== "Unknown") {
+            updateData.username = username;
+            updateData.$addToSet = { aliases: username };
+        }
+        
         if (sheckles !== undefined) updateData.sheckles = sheckles;
         if (scrap !== undefined) updateData.scrap = scrap;
 
@@ -104,12 +108,11 @@ app.post('/api/players/track', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. BAN (Handles Timed Bans)
+// 3. BAN
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     const { productUserId, reason, durationMinutes } = req.body;
     let expireDate = null;
     
-    // Only set expiry if time is > 0
     if (durationMinutes && parseInt(durationMinutes) > 0) {
         expireDate = new Date();
         expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
