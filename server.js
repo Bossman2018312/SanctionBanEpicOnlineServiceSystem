@@ -18,8 +18,8 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .catch(err => console.error("❌ MongoDB Fail:", err));
 
 const PlayerSchema = new mongoose.Schema({
-    productUserId: String, 
-    playerId: String,      
+    productUserId: String, // New
+    playerId: String,      // Old Support
     username: String,
     aliases: [String],
     firstSeen: { type: Date, default: Date.now },
@@ -30,7 +30,7 @@ const PlayerSchema = new mongoose.Schema({
     banCount: { type: Number, default: 0 },
     sheckles: { type: Number, default: 0 },
     scrap: { type: Number, default: 0 }
-}, { strict: false }); 
+}, { strict: false });
 
 const Player = mongoose.model('Player', PlayerSchema);
 
@@ -42,6 +42,7 @@ const verifyAdmin = (req, res, next) => {
 // AUTO-UNBAN CHECK
 async function checkExpirations() {
     const now = new Date();
+    // Unban anyone whose expiry time has passed
     await Player.updateMany(
         { isBanned: true, banExpiresAt: { $ne: null, $lte: now } },
         { $set: { isBanned: false, banReason: "", banExpiresAt: null } }
@@ -50,7 +51,7 @@ async function checkExpirations() {
 
 // 1. GET PLAYERS
 app.get('/api/players', verifyAdmin, async (req, res) => {
-    await checkExpirations(); // Check if anyone should be unbanned
+    await checkExpirations(); 
     
     try {
         const rawPlayers = await Player.find().sort({ lastSeen: -1 });
@@ -78,7 +79,7 @@ app.post('/api/players/track', async (req, res) => {
         let { productUserId, username, sheckles, scrap } = req.body;
         if (!productUserId || productUserId.length < 5) return res.status(400).json({ error: "Invalid ID" });
 
-        await checkExpirations(); // Important: Check bans on login
+        await checkExpirations();
 
         const updateData = {
             username: username,
@@ -103,12 +104,12 @@ app.post('/api/players/track', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. BAN
+// 3. BAN (Handles Timed Bans)
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     const { productUserId, reason, durationMinutes } = req.body;
     let expireDate = null;
     
-    // Only set expiry if duration is provided and greater than 0
+    // Only set expiry if time is > 0
     if (durationMinutes && parseInt(durationMinutes) > 0) {
         expireDate = new Date();
         expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
