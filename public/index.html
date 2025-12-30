@@ -3,113 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GORILLA WARFARE // ADMIN</title>
+    <title>GORILLA WARFARE // COMMAND</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap');
 
         :root {
-            /* THEME: Deep Purple / Blue */
-            --bg-grad-1: #0a0510;
-            --bg-grad-2: #020202;
-            --card-bg: rgba(25, 20, 35, 0.9);
-            --card-border: rgba(100, 80, 255, 0.15);
-            --accent: #7c3aed; 
-            --accent-glow: #8b5cf6;
+            --bg-grad-1: #050505;
+            --bg-grad-2: #0a0510;
+            --card-bg: rgba(20, 20, 25, 0.95);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent: #8b5cf6; /* Vibe Purple */
+            --accent-glow: rgba(139, 92, 246, 0.4);
             --text-main: #ffffff;
-            --text-dim: #9ca3af;
+            --text-dim: #888;
             --green: #10b981;
             --red: #ef4444;
             --font-main: 'Inter', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
         }
 
+        /* --- CURSOR FIX --- */
+        * { cursor: none !important; } /* FORCE HIDE DEFAULT CURSOR */
+
         body {
-            background: linear-gradient(135deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 100%);
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
             color: var(--text-main);
             font-family: var(--font-main);
-            margin: 0;
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            cursor: none; /* Hide default cursor */
+            margin: 0; height: 100vh; overflow: hidden; display: flex;
         }
 
-        /* --- RESTORED WHITE 4x4 CURSOR --- */
         #cursor {
             position: fixed; top: 0; left: 0; 
-            width: 4px; height: 4px; 
-            background: white; 
-            pointer-events: none;
-            z-index: 9999; 
-            box-shadow: 0 0 8px white;
+            width: 4px; height: 4px; /* 4x4 PIXELS */
+            background: #ffffff; /* PITCH WHITE */
+            pointer-events: none; z-index: 99999;
+            box-shadow: 0 0 10px white;
             transform: translate(-50%, -50%);
             mix-blend-mode: difference;
         }
 
         /* --- LAYOUT --- */
         #sidebar {
-            width: 250px; background: rgba(0,0,0,0.4);
+            width: 260px; background: rgba(0,0,0,0.5);
             border-right: 1px solid var(--card-border);
-            display: flex; flex-direction: column; padding: 25px;
+            display: flex; flex-direction: column; padding: 30px;
             backdrop-filter: blur(10px);
         }
 
-        #main { flex: 1; padding: 40px; display: flex; flex-direction: column; position: relative; }
+        #main { flex: 1; padding: 40px; display: flex; flex-direction: column; }
 
         /* --- ANIMATIONS --- */
-        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes glow { 0% { border-color: var(--card-border); } 50% { border-color: var(--accent-glow); } 100% { border-color: var(--card-border); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
         /* --- COMPONENTS --- */
-        h1, h2 { margin: 0; font-weight: 800; letter-spacing: -0.5px; }
-        
         .card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 12px;
-            padding: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 30px rgba(0,0,0,0.5);
-            animation: slideIn 0.4s ease-out;
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 12px; padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            animation: popIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
-        /* --- INPUTS & BUTTONS --- */
         .search-bar {
-            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
+            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);
             padding: 15px; border-radius: 8px; color: white; font-family: var(--font-main);
-            outline: none; margin-bottom: 20px; cursor: none; transition: 0.2s; box-sizing: border-box;
+            outline: none; margin-bottom: 20px; transition: 0.3s; box-sizing: border-box;
         }
-        .search-bar:focus { border-color: var(--accent-glow); background: rgba(124, 58, 237, 0.05); }
+        .search-bar:focus { border-color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); }
 
-        .btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: 700; cursor: none; transition: 0.2s; text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px; }
+        .btn { 
+            padding: 10px 20px; border-radius: 6px; border: none; font-weight: 700; 
+            transition: 0.2s; text-transform: uppercase; font-size: 0.75em; letter-spacing: 1px; 
+        }
         .btn:hover { transform: translateY(-2px); filter: brightness(1.2); }
-        .btn-danger { background: var(--red); color: white; box-shadow: 0 0 15px rgba(239, 68, 68, 0.2); }
+        .btn-danger { background: var(--red); color: white; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
         .btn-ghost { background: transparent; border: 1px solid var(--card-border); color: #ccc; }
         .btn-ghost:hover { border-color: white; color: white; background: rgba(255,255,255,0.05); }
-        .btn-login { width: 100%; background: var(--accent); color: white; padding: 15px; box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }
+        .btn-login { width: 100%; background: var(--accent); color: white; padding: 15px; font-size: 1em; }
 
-        /* --- PLAYER LIST --- */
+        /* --- LIST --- */
         .player-row {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 15px; margin-bottom: 10px; border-radius: 8px;
-            background: rgba(255,255,255,0.03); transition: 0.2s;
-            border: 1px solid transparent;
-            animation: slideIn 0.3s backwards;
+            padding: 18px; margin-bottom: 8px; border-radius: 8px;
+            background: rgba(255,255,255,0.02); transition: all 0.2s;
+            border: 1px solid transparent; animation: slideIn 0.3s backwards;
         }
-        .player-row:hover { background: rgba(255,255,255,0.07); transform: translateX(5px); border-color: var(--accent); }
+        .player-row:hover { background: rgba(255,255,255,0.06); transform: translateX(5px); border-color: var(--accent); }
 
         .p-info { display: flex; align-items: center; gap: 15px; }
-        .p-avatar { width: 40px; height: 40px; background: linear-gradient(135deg, var(--accent), #4c1d95); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); }
+        .p-avatar { 
+            width: 45px; height: 45px; 
+            background: linear-gradient(135deg, var(--accent), #222); 
+            border-radius: 8px; display: flex; align-items: center; justify-content: center; 
+            font-weight: 800; font-family: var(--font-mono); border: 1px solid rgba(255,255,255,0.1);
+        }
         
-        .badge { padding: 4px 10px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; }
-        .b-clean { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.2); }
-        .b-banned { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.2); }
+        .badge { padding: 5px 10px; border-radius: 4px; font-size: 0.7em; font-weight: 800; letter-spacing: 1px; }
+        .b-clean { background: rgba(16, 185, 129, 0.1); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .b-banned { background: rgba(239, 68, 68, 0.1); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.2); }
 
-        /* --- LOGIN OVERLAY --- */
-        #login { position: fixed; inset: 0; background: var(--bg-grad-1); z-index: 50; display: flex; justify-content: center; align-items: center; }
-        
-        /* --- MODAL --- */
-        #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(8px); }
+        /* --- SCREENS --- */
+        #login { position: fixed; inset: 0; background: #000; z-index: 50; display: flex; justify-content: center; align-items: center; }
+        #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(10px); }
         
     </style>
 </head>
@@ -117,9 +112,9 @@
     <div id="cursor"></div>
 
     <div id="login">
-        <div class="card" style="width: 380px; text-align: center;">
-            <h1 style="margin-bottom: 5px; font-size: 2em;">GORILLA <span style="color:var(--accent-glow)">WARFARE</span></h1>
-            <p style="color: var(--text-dim); margin-bottom: 30px; font-size: 0.9em; letter-spacing: 1px;">ADMINISTRATION</p>
+        <div class="card" style="width: 400px; text-align: center; border-top: 4px solid var(--accent);">
+            <h1 style="margin-bottom: 5px; font-size: 2.5em; letter-spacing: -2px;">GORILLA <span style="color:var(--accent)">WARFARE</span></h1>
+            <p style="color: var(--text-dim); margin-bottom: 30px; font-size: 0.9em; letter-spacing: 2px;">ADMINISTRATION</p>
             
             <input type="text" id="api" value="https://sanctionbanepiconlineservicesystem.onrender.com" class="search-bar" placeholder="Server URL">
             <input type="password" id="pass" class="search-bar" placeholder="Access Key">
@@ -130,27 +125,27 @@
 
     <div id="dashboard" style="display:none; width:100%; height:100%;">
         <div id="sidebar">
-            <h2 style="margin-bottom: 40px; color: white;">GW <span style="color:var(--accent)">PANEL</span></h2>
+            <h2 style="margin-bottom: 40px; color: white; letter-spacing: -1px;">GW <span style="color:var(--accent)">PANEL</span></h2>
             
-            <div style="color: var(--text-dim); font-size: 0.75em; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px;">MAIN</div>
-            <div style="padding: 12px; background: var(--accent); border-radius: 6px; margin-bottom: 5px; color: white; font-weight: 600; font-size: 0.9em;">Player Database</div>
-            <div style="padding: 12px; color: var(--text-dim); font-size: 0.9em;">Server Logs</div>
+            <div style="color: var(--text-dim); font-size: 0.75em; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px;">MENU</div>
+            <div style="padding: 12px; background: var(--accent); border-radius: 6px; margin-bottom: 5px; color: white; font-weight: 600; font-size: 0.9em; box-shadow: 0 0 15px var(--accent-glow);">Database</div>
+            <div style="padding: 12px; color: var(--text-dim); font-size: 0.9em;">Logs</div>
             <div style="padding: 12px; color: var(--text-dim); font-size: 0.9em;">Settings</div>
             
             <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--card-border);">
-                <div style="font-size: 0.8em; color: var(--text-dim);">SYSTEM STATUS</div>
-                <div style="color: var(--green); font-weight: bold; font-size: 0.9em; margin-top: 5px;">● OPERATIONAL</div>
+                <div style="font-size: 0.8em; color: var(--text-dim);">STATUS</div>
+                <div style="color: var(--green); font-weight: bold; font-size: 0.9em; margin-top: 5px; text-shadow: 0 0 10px var(--green);">● SECURE CONNECTION</div>
             </div>
         </div>
 
         <div id="main">
             <div style="display: flex; justify-content: space-between; margin-bottom: 25px; align-items: center;">
-                <h1 style="font-size: 1.8em;">Database</h1>
-                <button onclick="refresh()" class="btn btn-ghost">REFRESH DATA</button>
+                <h1 style="font-size: 2em; letter-spacing: -1px;">Player Database</h1>
+                <button onclick="refresh()" class="btn btn-ghost">REFRESH SIGNAL</button>
             </div>
 
-            <div class="card" style="margin-bottom: 20px; padding: 10px;">
-                <input type="text" id="search" onkeyup="render()" class="search-bar" style="margin:0; border:none; background: transparent;" placeholder="Filter by Name or ID...">
+            <div class="card" style="margin-bottom: 20px; padding: 10px; border-left: 4px solid var(--accent);">
+                <input type="text" id="search" onkeyup="render()" class="search-bar" style="margin:0; border:none; background: transparent;" placeholder="Search Username or ID...">
             </div>
 
             <div id="list" style="overflow-y: auto; flex: 1; padding-right: 5px;"></div>
@@ -158,9 +153,9 @@
     </div>
 
     <div id="modal">
-        <div class="card" style="width: 450px; border: 1px solid var(--red);">
+        <div class="card" style="width: 450px; border: 1px solid var(--red); box-shadow: 0 0 50px rgba(239, 68, 68, 0.2);">
             <h2 style="color:var(--red); margin-bottom: 10px;">SANCTION PLAYER</h2>
-            <div style="color:var(--text-dim); margin-bottom: 25px; font-size: 0.9em; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px;">Target: <span id="m-target" style="color:white; font-weight:bold;"></span></div>
+            <div style="color:var(--text-dim); margin-bottom: 25px; font-size: 0.9em; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px;">Target: <span id="m-target" style="color:white; font-weight:bold;"></span></div>
             
             <input type="text" id="m-reason" class="search-bar" placeholder="Violation Reason">
             <input type="number" id="m-time" class="search-bar" placeholder="Duration (Minutes) - 0 for Perma">
@@ -173,12 +168,12 @@
     </div>
 
     <script>
-        // --- CURSOR LERP ---
+        // --- CUSTOM LERP CURSOR ---
         const c = document.getElementById('cursor');
         let mx = 0, my = 0, cx = 0, cy = 0;
         document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
         function loop() {
-            cx += (mx - cx) * 0.2; cy += (my - cy) * 0.2;
+            cx += (mx - cx) * 0.15; cy += (my - cy) * 0.15;
             c.style.left = cx + 'px'; c.style.top = cy + 'px';
             requestAnimationFrame(loop);
         }
@@ -190,9 +185,6 @@
         async function auth() {
             let u = document.getElementById('api').value.replace(/\/$/,"");
             let p = document.getElementById('pass').value;
-            let m = document.getElementById('msg');
-            m.innerText = "AUTHENTICATING...";
-            
             try {
                 let r = await fetch(u+'/api/players', {headers:{'x-admin-auth':p}});
                 if(!r.ok) throw "ACCESS DENIED";
@@ -204,7 +196,7 @@
                     document.getElementById('dashboard').style.display='flex';
                     render();
                 }, 500);
-            } catch(e) { m.innerText="CONNECTION FAILED"; }
+            } catch(e) { document.getElementById('msg').innerText="CONNECTION FAILED"; }
         }
 
         async function refresh() {
@@ -220,14 +212,11 @@
             l.innerHTML="";
             
             if(DB.length === 0) {
-                l.innerHTML = `<div style="text-align:center; color:#555; margin-top:50px;">DATABASE EMPTY - WAITING FOR PLAYERS</div>`;
+                l.innerHTML = `<div style="text-align:center; color:#555; margin-top:50px; font-family:var(--font-mono);">NO RECORDS FOUND</div>`;
                 return;
             }
 
             DB.filter(p => (p.username||"").toLowerCase().includes(s) || p.productUserId.includes(s)).forEach((p, i) => {
-                // Ignore ghost users
-                if(p.productUserId === "undefined" || !p.productUserId) return;
-
                 let div = document.createElement('div');
                 div.className = "player-row";
                 div.style.animationDelay = (i * 0.05) + "s";
@@ -246,12 +235,12 @@
                         </div>
                     </div>
                     <div style="display:flex; gap:20px; align-items:center;">
-                        <div style="font-size:0.9em; color:var(--text-dim); display:flex; gap:15px;">
+                        <div style="font-size:0.9em; color:var(--text-dim); display:flex; gap:15px; font-family:var(--font-mono);">
                             <span>💰 ${p.sheckles||0}</span> <span>⚙️ ${p.scrap||0}</span>
                         </div>
                         ${badge}
                         ${action}
-                        <button onclick="del('${p.productUserId}')" class="btn btn-ghost" style="padding:8px; width:30px; display:flex; justify-content:center;">✕</button>
+                        <button onclick="del('${p.productUserId}')" class="btn btn-ghost" style="padding:8px; width:30px; display:flex; justify-content:center; align-items:center;">✕</button>
                     </div>
                 `;
                 l.appendChild(div);
@@ -262,7 +251,6 @@
         function closeModal() { document.getElementById('modal').style.display='none'; }
 
         async function commitBan() {
-            if(!SEL) return;
             let r = document.getElementById('m-reason').value;
             let m = document.getElementById('m-time').value;
             await fetch(API+'/api/ban', {
@@ -273,14 +261,14 @@
         }
 
         async function unban(id) {
-            if(confirm("Confirm Revoke Sanction?")) {
+            if(confirm("Confirm Revoke?")) {
                 await fetch(API+'/api/unban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})});
                 refresh();
             }
         }
         
         async function del(id) {
-            if(confirm("⚠ PERMANENTLY DELETE RECORD? This cannot be undone.")) {
+            if(confirm("⚠ PERMANENTLY DELETE RECORD?")) {
                 await fetch(API+'/api/delete', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})});
                 refresh();
             }
