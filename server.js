@@ -2,8 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
-const multer = require('multer'); // NEW: For uploading backups
-const fs = require('fs'); // NEW: For reading files
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json());
@@ -18,15 +18,20 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 const PORT = process.env.PORT || 3000;
 
-// CONNECT TO DB & START BOT
+// CONNECT DB & START BOT (WITH DEBUGGING)
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => {
         console.log("✅ MongoDB Connected");
-        // START THE BOT
+        
+        console.log("🤖 Attempting to start Discord Bot...");
         try {
             const { startBot } = require('./bot');
             startBot();
-        } catch (e) { console.log("⚠️ Bot failed to start:", e.message); }
+            console.log("✅ Bot Start Function Called Successfully.");
+        } catch (e) { 
+            console.error("❌❌❌ CRITICAL BOT ERROR ❌❌❌");
+            console.error(e);
+        }
     })
     .catch(err => console.error("❌ MongoDB Fail:", err));
 
@@ -52,7 +57,6 @@ const verifyAdmin = (req, res, next) => {
     next();
 };
 
-// AUTO-UNBAN CHECK
 async function checkExpirations() {
     const now = new Date();
     await Player.updateMany(
@@ -61,53 +65,32 @@ async function checkExpirations() {
     );
 }
 
-// --- NEW: RESTORE BACKUP ROUTE ---
+// RESTORE ROUTE
 app.post('/api/restore', verifyAdmin, upload.single('backupFile'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-
     try {
         const filePath = req.file.path;
         const fileContent = fs.readFileSync(filePath, 'utf-8');
         const players = JSON.parse(fileContent);
-
-        if (!Array.isArray(players)) throw new Error("Invalid JSON: Must be an array");
+        if (!Array.isArray(players)) throw new Error("Invalid JSON");
 
         let restoredCount = 0;
-
         for (const p of players) {
-            // Identify user by either ID
             const pid = p.productUserId || p.playerId;
             if (!pid) continue;
-
-            // Remove internal mongo fields
             delete p._id; delete p.__v;
-
-            await Player.findOneAndUpdate(
-                { $or: [{ productUserId: pid }, { playerId: pid }] },
-                p,
-                { upsert: true, new: true }
-            );
+            await Player.findOneAndUpdate({ $or: [{ productUserId: pid }, { playerId: pid }] }, p, { upsert: true, new: true });
             restoredCount++;
         }
-
-        // Cleanup temp file
         fs.unlinkSync(filePath);
-
-        console.log(`✅ Restored ${restoredCount} players from backup.`);
+        console.log(`✅ Restored ${restoredCount} players.`);
         res.json({ success: true, count: restoredCount });
-
-    } catch (err) {
-        console.error("Restore Error:", err);
-        res.status(500).json({ error: "Restore failed: " + err.message });
-    }
+    } catch (err) { res.status(500).json({ error: "Restore failed: " + err.message }); }
 });
 
-// --- EXISTING ROUTES ---
-
-// 1. GET PLAYERS
+// GET PLAYERS
 app.get('/api/players', verifyAdmin, async (req, res) => {
-    await checkExpirations(); 
-    
+    await checkExpirations();
     try {
         const rawPlayers = await Player.find().sort({ lastSeen: -1 });
         const players = rawPlayers.map(p => ({
@@ -122,72 +105,44 @@ app.get('/api/players', verifyAdmin, async (req, res) => {
             lastSeen: p.lastSeen,
             banCount: p.banCount || 0
         }));
-        
         const cleanList = players.filter(p => p.productUserId !== "UNKNOWN_ID" && p.productUserId !== "undefined");
         res.json({ success: true, players: cleanList });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. TRACKING
+// TRACKING
 app.post('/api/players/track', async (req, res) => {
     try {
         let { productUserId, username, sheckles, scrap } = req.body;
         if (!productUserId || productUserId.length < 5) return res.status(400).json({ error: "Invalid ID" });
-
         await checkExpirations();
-
         const updateData = { lastSeen: new Date() };
-
         if (username && username !== "Checking..." && username !== "Unknown") {
             updateData.username = username;
             updateData.$addToSet = { aliases: username };
         }
-        
         if (sheckles !== undefined) updateData.sheckles = sheckles;
         if (scrap !== undefined) updateData.scrap = scrap;
-
-        const player = await Player.findOneAndUpdate(
-            { $or: [{ productUserId: productUserId }, { playerId: productUserId }] },
-            updateData,
-            { new: true, upsert: true, setDefaultsOnInsert: true }
-        );
-        
-        if (!player.productUserId) {
-            player.productUserId = productUserId;
-            await player.save();
-        }
-
+        const player = await Player.findOneAndUpdate({ $or: [{ productUserId: productUserId }, { playerId: productUserId }] }, updateData, { new: true, upsert: true, setDefaultsOnInsert: true });
+        if (!player.productUserId) { player.productUserId = productUserId; await player.save(); }
         res.json({ success: true, isBanned: player.isBanned });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 3. BAN
+// BAN
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     const { productUserId, reason, durationMinutes } = req.body;
     let expireDate = null;
-    
     if (durationMinutes && parseInt(durationMinutes) > 0) {
         expireDate = new Date();
         expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
     }
-
-    await Player.findOneAndUpdate(
-        { $or: [{ productUserId: productUserId }, { playerId: productUserId }] },
-        { 
-            isBanned: true, 
-            banReason: reason || "Admin Ban", 
-            banExpiresAt: expireDate, 
-            $inc: { banCount: 1 } 
-        }
-    );
+    await Player.findOneAndUpdate({ $or: [{ productUserId: productUserId }, { playerId: productUserId }] }, { isBanned: true, banReason: reason || "Admin Ban", banExpiresAt: expireDate, $inc: { banCount: 1 } });
     res.json({ success: true });
 });
 
 app.post('/api/unban', verifyAdmin, async (req, res) => {
-    await Player.findOneAndUpdate(
-        { $or: [{ productUserId: req.body.productUserId }, { playerId: req.body.productUserId }] },
-        { isBanned: false, banReason: "", banExpiresAt: null }
-    );
+    await Player.findOneAndUpdate({ $or: [{ productUserId: req.body.productUserId }, { playerId: req.body.productUserId }] }, { isBanned: false, banReason: "", banExpiresAt: null });
     res.json({ success: true });
 });
 
