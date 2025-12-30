@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GORILLA WARFARE // COMMAND</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@300;500;700&family=Rajdhani:wght@500;700&display=swap');
+        :root { --bg: #030303; --panel: #0e0e0e; --accent: #00ffcc; --accent-glow: rgba(0,255,204,0.3); --danger: #ff003c; --text: #eee; --font-h: 'Teko'; --font-b: 'Rajdhani'; }
+        body { background: radial-gradient(circle at center, #111 0%, #000 100%); color: var(--text); font-family: var(--font-b); margin:0; height:100vh; overflow:hidden; display:flex; justify-content:center; align-items:center; }
+        
+        .glass { background: rgba(10,10,12,0.9); border: 1px solid #222; box-shadow: 0 0 40px rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
+        h1, h2, button { font-family: var(--font-h); text-transform: uppercase; margin:0; }
+        
+        /* LOGIN */
+        #login { position:fixed; z-index:100; width:450px; padding:50px; text-align:center; border-top:4px solid var(--accent); transition:0.5s; box-shadow:0 0 50px var(--accent-glow); }
+        input { background:#151515; border:1px solid #333; color:white; padding:12px; width:100%; font-family:var(--font-b); font-size:1.1em; transition:0.3s; box-sizing:border-box; }
+        input:focus { border-color:var(--accent); outline:none; box-shadow:0 0 15px var(--accent-glow); }
+        button { cursor:pointer; border:none; transition:0.2s; font-weight:bold; }
+        
+        /* DASHBOARD */
+        #dash { display:none; width:95vw; height:90vh; grid-template-columns:1fr 450px; gap:20px; opacity:0; transition:0.5s; }
+        
+        /* LIST */
+        .list-panel { display:flex; flex-direction:column; padding:20px; border-left:1px solid #333; }
+        .row { display:flex; justify-content:space-between; align-items:center; padding:15px; margin-bottom:5px; background:rgba(255,255,255,0.02); border-left:3px solid transparent; cursor:pointer; transition:0.2s; animation: slideUp 0.3s forwards; }
+        .row:hover { background:rgba(255,255,255,0.06); transform:translateX(5px); border-left-color:var(--accent); }
+        .row.banned { border-left-color:var(--danger); background:rgba(255,0,60,0.05); }
+        
+        /* PROFILE */
+        .prof-panel { padding:30px; text-align:center; display:flex; flex-direction:column; justify-content:center; border-left:1px solid #333; position:relative; }
+        .prof-content { display:none; width:100%; animation: slideIn 0.4s; }
+        
+        .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:20px 0; }
+        .stat-box { background:#111; padding:15px; border:1px solid #222; }
+        .stat-val { font-size:2em; font-family:var(--font-h); font-weight:bold; }
+        
+        .ban-panel { background:rgba(255,0,60,0.1); border:1px solid var(--danger); padding:15px; margin-top:15px; display:none; animation: pulseRed 2s infinite; }
+        
+        /* ACTIONS */
+        .btn-act { width:100%; padding:15px; background:transparent; border:1px solid; font-weight:bold; margin-top:10px; cursor:pointer; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), 0 100%, 0 10px); }
+        .btn-ban { border-color:var(--danger); color:var(--danger); }
+        .btn-ban:hover { background:var(--danger); color:white; box-shadow:0 0 20px rgba(255,0,60,0.4); }
+        .btn-unban { border-color:var(--accent); color:var(--accent); }
+        .btn-unban:hover { background:var(--accent); color:black; box-shadow:0 0 20px var(--accent-glow); }
+        .btn-del { border-color:#666; color:#666; font-size:0.8em; margin-top:30px; }
+        .btn-del:hover { background:#333; color:white; border-color:white; }
+
+        /* MODAL */
+        #modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:200; align-items:center; justify-content:center; }
+        .modal-box { width:450px; padding:40px; background:#050505; border:1px solid var(--danger); box-shadow:0 0 60px rgba(255,0,60,0.15); }
+        .time-row { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin:10px 0; }
+        
+        @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes slideIn { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes pulseRed { 0%{box-shadow:0 0 5px rgba(255,0,60,0.1)} 50%{box-shadow:0 0 20px rgba(255,0,60,0.3)} 100%{box-shadow:0 0 5px rgba(255,0,60,0.1)} }
+    </style>
+</head>
+<body>
+    <div id="login" class="glass">
+        <h1 style="font-size:3.5em; margin-bottom:5px;">GORILLA WARFARE</h1>
+        <div style="color:var(--accent); letter-spacing:4px; margin-bottom:30px;">ADMIN TERMINAL</div>
+        <input type="text" id="api-url" placeholder="SERVER URL" value="https://sanctionbanepiconlineservicesystem.onrender.com">
+        <input type="password" id="pass" placeholder="ACCESS KEY">
+        <button onclick="auth()" class="btn-act" style="background:var(--accent); color:black; border:none; font-size:1.5em;">INITIALIZE</button>
+        <p id="msg" style="color:var(--danger); margin-top:10px;"></p>
+    </div>
+
+    <div id="dash">
+        <div class="glass list-panel">
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
+                <h2 style="font-size:2em;">DATABASE</h2>
+                <button onclick="refresh()" style="background:transparent; border:1px solid #444; color:#888; padding:0 15px;">REFRESH</button>
+            </div>
+            <input type="text" id="search" placeholder="SEARCH IDENTITY..." onkeyup="render()">
+            <div id="list" style="overflow-y:auto; flex:1;"></div>
+        </div>
+
+        <div class="glass prof-panel">
+            <div id="empty-prof" style="color:#444; letter-spacing:2px;">SELECT TARGET TO VIEW DATA</div>
+            <div id="prof" class="prof-content">
+                <h1 id="p-name" style="font-size:3.5em; line-height:1; text-shadow:0 0 15px rgba(255,255,255,0.1);">UNKNOWN</h1>
+                <div id="p-id" style="color:#666; font-family:monospace; margin-bottom:20px; user-select:all;">0000</div>
+                
+                <div class="stats-grid">
+                    <div class="stat-box"><div id="p-sheck" class="stat-val" style="color:#ffd700">0</div><div style="color:#666; font-size:0.8em;">SHECKLES</div></div>
+                    <div class="stat-box"><div id="p-scrap" class="stat-val" style="color:#a0a0a0">0</div><div style="color:#666; font-size:0.8em;">SCRAP</div></div>
+                    <div class="stat-box"><div id="p-bans" class="stat-val" style="color:var(--danger)">0</div><div style="color:var(--danger); font-size:0.8em;">PRIOR BANS</div></div>
+                    <div class="stat-box"><div id="p-stat" class="stat-val">CLEAN</div><div style="color:#666; font-size:0.8em;">STATUS</div></div>
+                </div>
+
+                <div class="ban-panel" id="ban-info">
+                    <div style="color:var(--danger); font-weight:bold; font-size:1.2em; font-family:var(--font-h)">ACTIVE SANCTION</div>
+                    <div style="color:white; margin-top:5px;">REASON: <span id="p-reason" style="font-weight:bold;">...</span></div>
+                    <div style="color:#aaa; font-size:0.9em;">EXPIRES: <span id="p-expire">...</span></div>
+                </div>
+
+                <div style="text-align:left; font-size:0.9em; color:#666; margin-top:20px; padding-top:15px; border-top:1px solid #222;">
+                    <div style="display:flex; justify-content:space-between;"><span>CREATED</span> <span id="p-first" style="color:white">...</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>LAST SEEN</span> <span id="p-last" style="color:white">...</span></div>
+                </div>
+                
+                <div id="actions"></div>
+                <button class="btn-act btn-del" onclick="delUser()">DELETE USER RECORD</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal">
+        <div class="modal-box">
+            <h2 style="color:var(--danger); font-size:2.5em;">EXECUTE SANCTION</h2>
+            <div style="color:#666; margin-bottom:20px;">TARGET: <span id="m-target" style="color:white"></span></div>
+            <div style="color:var(--accent); font-size:0.8em;">DURATION</div>
+            <div class="time-row">
+                <input type="number" id="t-m" placeholder="M"><input type="number" id="t-d" placeholder="D">
+                <input type="number" id="t-h" placeholder="H"><input type="number" id="t-min" placeholder="M">
+            </div>
+            <div style="color:var(--accent); font-size:0.8em;">REASON</div>
+            <input type="text" id="m-reason">
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="closeModal()" style="flex:1; background:#222; color:#666; padding:15px;">ABORT</button>
+                <button onclick="commitBan()" style="flex:1; background:var(--danger); color:white; padding:15px;">CONFIRM</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let API="", TOKEN="", DB=[], SEL=null;
+
+        async function auth() {
+            let u=document.getElementById('api-url').value.replace(/\/$/,""), p=document.getElementById('pass').value;
+            try {
+                let r = await fetch(u+'/api/players', {headers:{'x-admin-auth':p}});
+                if(!r.ok) throw "ACCESS DENIED";
+                API=u; TOKEN=p; DB=(await r.json()).players;
+                document.getElementById('login').style.opacity=0;
+                setTimeout(()=>{ 
+                    document.getElementById('login').style.display='none'; 
+                    document.getElementById('dash').style.display='grid';
+                    setTimeout(()=>document.getElementById('dash').style.opacity=1, 50);
+                    render();
+                },500);
+            } catch(e) { document.getElementById('msg').innerText="CONNECTION FAILED"; }
+        }
+
+        async function refresh() {
+            try {
+                let r = await fetch(API+'/api/players', {headers:{'x-admin-auth':TOKEN}});
+                DB = (await r.json()).players;
+                render();
+                if(SEL) loadProf(SEL.productUserId);
+            } catch(e){}
+        }
+
+        function render() {
+            let l=document.getElementById('list'), s=document.getElementById('search').value.toLowerCase();
+            l.innerHTML="";
+            document.getElementById('cnt-total').innerText = DB.length;
+            
+            DB.filter(p=>(p.username||"").toLowerCase().includes(s)||p.productUserId.includes(s)).forEach((p, i)=>{
+                let r=document.createElement('div'); r.className=`row ${p.isBanned?'banned':''}`;
+                r.style.animationDelay = `${i*0.05}s`;
+                r.onclick=()=>loadProf(p.productUserId);
+                let t=p.isBanned?`<span style="color:var(--danger); font-weight:bold;">BANNED</span>`:`<span style="color:var(--accent); font-weight:bold;">CLEAN</span>`;
+                r.innerHTML=`<div><div style="font-weight:bold; font-size:1.2em; font-family:var(--font-h)">${p.username||"UNKNOWN"}</div><div style="font-size:0.8em; color:#666; font-family:monospace">${p.productUserId}</div></div>${t}`;
+                l.appendChild(r);
+            });
+        }
+
+        function loadProf(id) {
+            let p=DB.find(x=>x.productUserId===id); if(!p) return; SEL=p;
+            document.getElementById('empty-prof').style.display='none';
+            document.getElementById('prof').style.display='block';
+            
+            // Populate Data
+            document.getElementById('p-name').innerText = p.username||"UNKNOWN";
+            document.getElementById('p-id').innerText = p.productUserId;
+            document.getElementById('p-sheck').innerText = p.sheckles||0;
+            document.getElementById('p-scrap').innerText = p.scrap||0;
+            document.getElementById('p-bans').innerText = p.banCount||0;
+            document.getElementById('p-first').innerText = fmt(p.firstSeen);
+            document.getElementById('p-last').innerText = fmt(p.lastSeen);
+
+            // Ban Logic
+            if(p.isBanned) {
+                document.getElementById('p-stat').innerText="BANNED";
+                document.getElementById('p-stat').style.color="var(--danger)";
+                document.getElementById('ban-info').style.display='block';
+                document.getElementById('p-reason').innerText=p.banReason;
+                document.getElementById('p-expire').innerText=fmt(p.banExpiresAt);
+                document.getElementById('actions').innerHTML=`<button class="btn-act btn-unban" onclick="unban('${p.productUserId}')">REVOKE SANCTION</button>`;
+            } else {
+                document.getElementById('p-stat').innerText="CLEAN";
+                document.getElementById('p-stat').style.color="var(--accent)";
+                document.getElementById('ban-info').style.display='none';
+                document.getElementById('actions').innerHTML=`<button class="btn-act btn-ban" onclick="openModal()">INITIATE SANCTION</button>`;
+            }
+        }
+
+        function fmt(d) { return d ? new Date(d).toLocaleString("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"numeric"})+" EST" : "NEVER"; }
+        function openModal() { document.getElementById('m-target').innerText=SEL.username; document.getElementById('modal').style.display='flex'; }
+        function closeModal() { document.getElementById('modal').style.display='none'; }
+
+        async function commitBan() {
+            let m=(parseInt(document.getElementById('t-m').value)||0)*43200 + (parseInt(document.getElementById('t-d').value)||0)*1440 + (parseInt(document.getElementById('t-h').value)||0)*60 + (parseInt(document.getElementById('t-min').value)||0);
+            await fetch(API+'/api/ban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:SEL.productUserId, reason:document.getElementById('m-reason').value, durationMinutes:m})});
+            closeModal(); refresh();
+        }
+
+        async function unban(id) {
+            if(confirm("REVOKE?")) { await fetch(API+'/api/unban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})}); refresh(); }
+        }
+
+        async function delUser() {
+            if(confirm("⚠ WARNING: PERMANENTLY DELETE USER DATA?")) {
+                await fetch(API+'/api/delete', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:SEL.productUserId})});
+                document.getElementById('empty-prof').style.display='block';
+                document.getElementById('prof').style.display='none';
+                refresh();
+            }
+        }
+    </script>
+</body>
+</html>
