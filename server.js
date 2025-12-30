@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// FORCE DASHBOARD LOAD
+// FORCE DASHBOARD TO LOAD
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
@@ -37,25 +37,28 @@ const verifyAdmin = (req, res, next) => {
     next();
 };
 
-async function checkExpirations() {
+async function cleanup() {
     const now = new Date();
+    // 1. Unban expired players
     await Player.updateMany(
         { isBanned: true, banExpiresAt: { $ne: null, $lte: now } },
         { $set: { isBanned: false, banReason: "", banExpiresAt: null } }
     );
+    // 2. DELETE BROKEN "UNDEFINED" USERS AUTOMATICALLY
+    await Player.deleteMany({ productUserId: "undefined" });
 }
 
-// 1. TRACKING (Strict ID Check + No "undefined" allowed)
+// 1. TRACKING (Now Prevents Duplicates)
 app.post('/api/players/track', async (req, res) => {
     try {
         let { productUserId, username, sheckles, scrap } = req.body;
 
-        // STOP GHOSTS: Reject bad IDs immediately
+        // REJECT BAD DATA
         if (!productUserId || productUserId === "undefined" || productUserId.trim().length < 5) {
             return res.status(400).json({ error: "Invalid ID" });
         }
 
-        await checkExpirations();
+        await cleanup();
 
         const updateData = {
             username: username,
@@ -66,7 +69,7 @@ app.post('/api/players/track', async (req, res) => {
         if (sheckles !== undefined) updateData.sheckles = sheckles;
         if (scrap !== undefined) updateData.scrap = scrap;
 
-        // Only create new if ID is valid
+        // Use FindOneAndUpdate with UPSERT to handle both new and existing in one shot
         const player = await Player.findOneAndUpdate(
             { productUserId: productUserId },
             updateData,
@@ -77,14 +80,14 @@ app.post('/api/players/track', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// 2. GET LIST (Clean list every time)
 app.get('/api/players', verifyAdmin, async (req, res) => {
-    await checkExpirations();
-    // Filter out bad IDs from the list before sending to website
-    const players = await Player.find({ productUserId: { $ne: "undefined" } }).sort({ lastSeen: -1 });
+    await cleanup(); // Cleans up "undefined" users before showing list
+    const players = await Player.find().sort({ lastSeen: -1 });
     res.json({ success: true, players });
 });
 
-// 2. BAN (Prevents creating new users)
+// 3. BAN (Safe Mode)
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     try {
         const { productUserId, reason, durationMinutes } = req.body;
@@ -97,7 +100,7 @@ app.post('/api/ban', verifyAdmin, async (req, res) => {
             expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
         }
 
-        // upsert: FALSE ensures we never create a ghost user when banning
+        // upsert: FALSE prevents creating a ghost user if the ID is wrong
         const result = await Player.findOneAndUpdate(
             { productUserId },
             { 
@@ -110,7 +113,6 @@ app.post('/api/ban', verifyAdmin, async (req, res) => {
         );
 
         if (!result) return res.status(404).json({ error: "Player not found" });
-
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
