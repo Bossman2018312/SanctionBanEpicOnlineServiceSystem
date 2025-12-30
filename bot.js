@@ -3,13 +3,20 @@ const mongoose = require('mongoose');
 const cron = require('node-cron');
 
 // --- CONFIGURATION ---
-const BOT_TOKEN = "MTQ1NTY4Mzc1OTgxMzgyMDY1MQ.GQWVWE.yrDU1XtEt-N54kq9IApom7oW3OZsZAuzKkscAs";
-const CHANNEL_ID = "1455641113447633027";
+const CHANNEL_ID = "1455641113447633027"; // <--- Paste your Channel ID here
 // ---------------------
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 function startBot() {
+    // SECURE: Grab token from Render Environment Variables
+    const token = process.env.DISCORD_BOT_TOKEN;
+
+    if (!token) {
+        console.log("⚠️ Bot skipped: Missing DISCORD_BOT_TOKEN in Render Environment Variables.");
+        return;
+    }
+
     client.once('ready', () => {
         console.log(`🤖 Backup Bot Online: ${client.user.tag}`);
 
@@ -23,22 +30,22 @@ function startBot() {
         });
     });
 
-    client.login(BOT_TOKEN);
+    client.login(token);
 }
 
 async function runBackup() {
     try {
         const channel = await client.channels.fetch(CHANNEL_ID);
-        if (!channel) return console.error("❌ Channel not found!");
+        if (!channel) return console.error("❌ Channel not found! Check ID in bot.js");
 
-        // 1. Fetch all players using the model defined in server.js
-        // We use mongoose.model('Player') because server.js already defined it
+        // Grab the 'Player' model (already set up in server.js)
         const Player = mongoose.model('Player');
-        const players = await Player.find({}, { _id: 0, __v: 0 }); // Exclude internal Mongo IDs
         
+        // 1. Get all players (Hide internal database IDs for cleaner backup)
+        const players = await Player.find({}, { _id: 0, __v: 0 });
         const jsonData = JSON.stringify(players, null, 2);
         
-        // 2. Create Buffer
+        // 2. Create the backup file
         const buffer = Buffer.from(jsonData, 'utf-8');
         const dateStr = new Date().toISOString().split('T')[0];
         const fileName = `GW_Backup_${dateStr}.json`;
