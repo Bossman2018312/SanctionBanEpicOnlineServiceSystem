@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// FORCE DASHBOARD
+// FORCE DASHBOARD LOAD
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
@@ -45,15 +45,15 @@ async function checkExpirations() {
     );
 }
 
-// TRACKING (Fixed Duplication)
+// 1. TRACKING (Strict ID Check)
 app.post('/api/players/track', async (req, res) => {
     try {
         let { productUserId, username, sheckles, scrap } = req.body;
-        
-        // STRICT ID CHECK
-        if (!productUserId || typeof productUserId !== 'string') return res.status(400).json({ error: "Invalid ID" });
-        productUserId = productUserId.trim(); // Remove spaces
-        if(productUserId.length < 5) return res.status(400).json({ error: "ID too short" });
+
+        // STOP GHOSTS: Reject bad IDs
+        if (!productUserId || productUserId === "undefined" || productUserId.length < 5) {
+            return res.status(400).json({ error: "Invalid ID" });
+        }
 
         await checkExpirations();
 
@@ -66,6 +66,7 @@ app.post('/api/players/track', async (req, res) => {
         if (sheckles !== undefined) updateData.sheckles = sheckles;
         if (scrap !== undefined) updateData.scrap = scrap;
 
+        // Uses upsert=true because this is the ONLY place valid new players are created
         const player = await Player.findOneAndUpdate(
             { productUserId: productUserId },
             updateData,
@@ -78,20 +79,26 @@ app.post('/api/players/track', async (req, res) => {
 
 app.get('/api/players', verifyAdmin, async (req, res) => {
     await checkExpirations();
-    const players = await Player.find().sort({ lastSeen: -1 });
+    // Filter out bad IDs just in case
+    const players = await Player.find({ productUserId: { $ne: "undefined" } }).sort({ lastSeen: -1 });
     res.json({ success: true, players });
 });
 
+// 2. BAN (Prevents creating new users)
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     try {
         const { productUserId, reason, durationMinutes } = req.body;
+
+        if (!productUserId || productUserId === "undefined") return res.status(400).json({ error: "Bad ID" });
+
         let expireDate = null;
         if (durationMinutes > 0) {
             expireDate = new Date();
             expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
         }
 
-        await Player.findOneAndUpdate(
+        // upsert: FALSE ensures we never create a ghost user when banning
+        const result = await Player.findOneAndUpdate(
             { productUserId },
             { 
                 isBanned: true, 
@@ -99,8 +106,11 @@ app.post('/api/ban', verifyAdmin, async (req, res) => {
                 banExpiresAt: expireDate,
                 $inc: { banCount: 1 } 
             },
-            { upsert: true }
+            { upsert: false } 
         );
+
+        if (!result) return res.status(404).json({ error: "Player not found" });
+
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
