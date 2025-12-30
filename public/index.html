@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARIX // ADMIN</title>
+    <title>GORILLA WARFARE // COMMAND</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap');
 
         :root {
-            /* Purple/Blue Theme from Image */
-            --bg-grad-1: #1a0b2e;
-            --bg-grad-2: #110e1b;
-            --card-bg: rgba(30, 27, 46, 0.7);
-            --card-border: rgba(255, 255, 255, 0.05);
+            /* THEME: Purple/Blue OLED */
+            --bg-grad-1: #0f0518;
+            --bg-grad-2: #050505;
+            --card-bg: rgba(20, 15, 30, 0.85);
+            --card-border: rgba(120, 100, 255, 0.1);
             --accent: #6d28d9; /* Deep Purple */
             --accent-glow: #8b5cf6;
             --text-main: #ffffff;
@@ -31,27 +31,34 @@
             height: 100vh;
             overflow: hidden;
             display: flex;
-            cursor: none;
+            cursor: none; /* Hide default mouse */
         }
 
-        /* --- CUSTOM CURSOR --- */
+        /* --- 1. FIXED CURSOR (White 4x4 Square) --- */
         #cursor {
-            position: fixed; top: 0; left: 0; width: 8px; height: 8px;
-            background: white; border-radius: 50%; pointer-events: none;
-            z-index: 9999; mix-blend-mode: overlay;
+            position: fixed; top: 0; left: 0; 
+            width: 6px; height: 6px; /* Slightly bigger for visibility */
+            background: #ffffff; 
+            pointer-events: none;
+            z-index: 9999; 
+            box-shadow: 0 0 10px white;
             transform: translate(-50%, -50%);
-            transition: width 0.2s, height 0.2s;
+            mix-blend-mode: difference;
         }
-        body:hover #cursor { width: 12px; height: 12px; }
 
         /* --- LAYOUT --- */
         #sidebar {
-            width: 250px; background: rgba(0,0,0,0.2);
+            width: 250px; background: rgba(0,0,0,0.3);
             border-right: 1px solid var(--card-border);
             display: flex; flex-direction: column; padding: 20px;
+            backdrop-filter: blur(5px);
         }
 
-        #main { flex: 1; padding: 40px; display: flex; flex-direction: column; }
+        #main { flex: 1; padding: 40px; display: flex; flex-direction: column; position: relative; }
+
+        /* --- ANIMATIONS --- */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes glowPulse { 0% { box-shadow: 0 0 5px var(--accent); } 50% { box-shadow: 0 0 15px var(--accent-glow); } 100% { box-shadow: 0 0 5px var(--accent); } }
 
         /* --- COMPONENTS --- */
         h1, h2 { margin: 0; font-weight: 800; letter-spacing: -0.5px; }
@@ -62,42 +69,47 @@
             border-radius: 12px;
             padding: 20px;
             backdrop-filter: blur(10px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 30px rgba(0,0,0,0.4);
+            animation: fadeIn 0.5s ease-out;
         }
 
-        /* --- LIST --- */
+        /* --- INPUTS & BUTTONS --- */
         .search-bar {
             width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
             padding: 15px; border-radius: 8px; color: white; font-family: var(--font-main);
-            outline: none; margin-bottom: 20px; cursor: none;
+            outline: none; margin-bottom: 20px; cursor: none; transition: 0.2s; box-sizing: border-box;
         }
-        .search-bar:focus { border-color: var(--accent-glow); }
+        .search-bar:focus { border-color: var(--accent-glow); box-shadow: 0 0 10px rgba(139, 92, 246, 0.2); }
 
+        .btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: 700; cursor: none; transition: 0.2s; text-transform: uppercase; letter-spacing: 1px; }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-danger { background: var(--red); color: white; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
+        .btn-ghost { background: transparent; border: 1px solid var(--card-border); color: #aaa; }
+        .btn-ghost:hover { border-color: white; color: white; background: rgba(255,255,255,0.05); }
+        .btn-login { width: 100%; background: var(--accent); color: white; padding: 15px; animation: glowPulse 3s infinite; }
+
+        /* --- PLAYER LIST --- */
         .player-row {
             display: flex; align-items: center; justify-content: space-between;
             padding: 15px; margin-bottom: 10px; border-radius: 8px;
             background: rgba(255,255,255,0.02); transition: 0.2s;
             border: 1px solid transparent;
+            animation: fadeIn 0.3s backwards;
         }
-        .player-row:hover { background: rgba(255,255,255,0.05); transform: translateY(-2px); border-color: rgba(255,255,255,0.1); }
+        .player-row:hover { background: rgba(255,255,255,0.05); transform: translateX(5px); border-color: var(--accent-glow); }
 
         .p-info { display: flex; align-items: center; gap: 15px; }
-        .p-avatar { width: 40px; height: 40px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .p-avatar { width: 40px; height: 40px; background: linear-gradient(135deg, var(--accent), var(--bg-grad-1)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 1px solid var(--card-border); }
         
         .badge { padding: 4px 10px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; }
-        .b-clean { background: rgba(16, 185, 129, 0.1); color: var(--green); }
-        .b-banned { background: rgba(239, 68, 68, 0.1); color: var(--red); }
+        .b-clean { background: rgba(16, 185, 129, 0.1); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .b-banned { background: rgba(239, 68, 68, 0.1); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
 
-        .btn { padding: 8px 16px; border-radius: 6px; border: none; font-weight: 600; cursor: none; transition: 0.2s; }
-        .btn-danger { background: var(--red); color: white; }
-        .btn-ghost { background: transparent; border: 1px solid var(--card-border); color: #aaa; }
-        .btn-ghost:hover { border-color: white; color: white; }
-
-        /* --- LOGIN --- */
+        /* --- LOGIN OVERLAY --- */
         #login { position: fixed; inset: 0; background: var(--bg-grad-1); z-index: 50; display: flex; justify-content: center; align-items: center; }
         
         /* --- MODAL --- */
-        #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
+        #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         
     </style>
 </head>
@@ -106,112 +118,144 @@
 
     <div id="login">
         <div class="card" style="width: 350px; text-align: center;">
-            <h1 style="margin-bottom: 20px;">ARIX <span style="color:var(--accent-glow)">ADMIN</span></h1>
-            <input type="text" id="api" value="https://sanctionbanepiconlineservicesystem.onrender.com" class="search-bar" placeholder="Server">
-            <input type="password" id="pass" class="search-bar" placeholder="Password">
-            <button onclick="auth()" class="btn" style="width:100%; background:var(--accent); color:white; padding:15px;">LOGIN</button>
-            <p id="msg" style="color:var(--red); margin-top:10px; font-size:0.8em;"></p>
+            <h1 style="margin-bottom: 5px;">GORILLA <span style="color:var(--accent-glow)">WARFARE</span></h1>
+            <p style="color: var(--text-dim); margin-bottom: 20px; font-size: 0.9em;">SECURE ADMIN TERMINAL</p>
+            
+            <input type="text" id="api" value="https://sanctionbanepiconlineservicesystem.onrender.com" class="search-bar" placeholder="Server URL">
+            <input type="password" id="pass" class="search-bar" placeholder="Access Key">
+            <button onclick="auth()" class="btn btn-login">INITIALIZE CONNECTION</button>
+            <p id="msg" style="color:var(--red); margin-top:10px; font-size:0.8em; min-height: 1.2em;"></p>
         </div>
     </div>
 
     <div id="dashboard" style="display:none; width:100%; height:100%;">
         <div id="sidebar">
-            <h2 style="margin-bottom: 40px;">ARIX</h2>
-            <div style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 10px;">GENERAL</div>
-            <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; margin-bottom: 5px;">Dashboard</div>
-            <div style="padding: 10px; color: var(--text-dim);">Users</div>
-            <div style="padding: 10px; color: var(--text-dim);">Settings</div>
+            <h2 style="margin-bottom: 40px; color: var(--accent-glow);">GW // ADMIN</h2>
+            <div style="color: var(--text-dim); font-size: 0.8em; margin-bottom: 10px; font-weight: bold;">MENU</div>
+            <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; margin-bottom: 5px; color: white; font-weight: 600;">Player Database</div>
+            <div style="padding: 10px; color: var(--text-dim);">Server Logs</div>
+            <div style="padding: 10px; color: var(--text-dim);">Config</div>
             <div style="margin-top: auto; padding: 10px; border-top: 1px solid var(--card-border);">
-                <div style="font-size: 0.8em; color: var(--text-dim);">STATUS</div>
-                <div style="color: var(--green);">Connected</div>
+                <div style="font-size: 0.8em; color: var(--text-dim);">NETWORK STATUS</div>
+                <div style="color: var(--green); font-weight: bold;">● ONLINE</div>
             </div>
         </div>
 
         <div id="main">
             <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
                 <h1>Player Database</h1>
-                <button onclick="refresh()" class="btn btn-ghost">REFRESH</button>
+                <button onclick="refresh()" class="btn btn-ghost">REFRESH LIST</button>
             </div>
 
-            <div class="card" style="margin-bottom: 20px;">
-                <input type="text" id="search" onkeyup="render()" class="search-bar" style="margin:0;" placeholder="Search Username or ID...">
+            <div class="card" style="margin-bottom: 20px; padding: 10px;">
+                <input type="text" id="search" onkeyup="render()" class="search-bar" style="margin:0; border:none; background: transparent;" placeholder="Search Username or ID...">
             </div>
 
-            <div id="list" style="overflow-y: auto; flex: 1;"></div>
+            <div id="list" style="overflow-y: auto; flex: 1; padding-right: 5px;"></div>
         </div>
     </div>
 
     <div id="modal">
-        <div class="card" style="width: 400px;">
-            <h2 style="color:var(--red); margin-bottom: 5px;">Sanction User</h2>
-            <div style="color:var(--text-dim); margin-bottom: 20px;">Target: <span id="m-target" style="color:white"></span></div>
+        <div class="card" style="width: 400px; border-color: var(--red);">
+            <h2 style="color:var(--red); margin-bottom: 5px;">INITIATE SANCTION</h2>
+            <div style="color:var(--text-dim); margin-bottom: 20px; font-size: 0.9em;">TARGET: <span id="m-target" style="color:white; font-weight:bold;"></span></div>
             
-            <input type="text" id="m-reason" class="search-bar" placeholder="Reason">
-            <input type="number" id="m-time" class="search-bar" placeholder="Minutes (0 = Perma)">
+            <input type="text" id="m-reason" class="search-bar" placeholder="Reason for Ban">
+            <input type="number" id="m-time" class="search-bar" placeholder="Duration (Minutes) - 0 for Perma">
             
             <div style="display: flex; gap: 10px;">
-                <button onclick="closeModal()" class="btn btn-ghost" style="flex:1;">Cancel</button>
-                <button onclick="commitBan()" class="btn btn-danger" style="flex:1;">Execute</button>
+                <button onclick="closeModal()" class="btn btn-ghost" style="flex:1;">CANCEL</button>
+                <button onclick="commitBan()" class="btn btn-danger" style="flex:1;">EXECUTE BAN</button>
             </div>
         </div>
     </div>
 
     <script>
-        // CURSOR
+        // --- CURSOR LERPING ---
         const c = document.getElementById('cursor');
-        document.addEventListener('mousemove', e => { c.style.left = e.clientX+'px'; c.style.top = e.clientY+'px'; });
+        let mx = 0, my = 0, cx = 0, cy = 0;
 
-        // LOGIC
+        document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+        function loop() {
+            cx += (mx - cx) * 0.15; // Smooth factor
+            cy += (my - cy) * 0.15;
+            c.style.left = cx + 'px';
+            c.style.top = cy + 'px';
+            requestAnimationFrame(loop);
+        }
+        loop();
+
+        // --- APP LOGIC ---
         let API="", TOKEN="", DB=[], SEL="";
 
         async function auth() {
             let u = document.getElementById('api').value.replace(/\/$/,"");
             let p = document.getElementById('pass').value;
+            let m = document.getElementById('msg');
+            m.innerText = "CONNECTING...";
+            
             try {
                 let r = await fetch(u+'/api/players', {headers:{'x-admin-auth':p}});
-                if(!r.ok) throw "Fail";
+                if(!r.ok) throw "ACCESS DENIED";
                 API=u; TOKEN=p; DB=(await r.json()).players;
-                document.getElementById('login').style.display='none';
-                document.getElementById('dashboard').style.display='flex';
-                render();
-            } catch(e) { document.getElementById('msg').innerText="Connection Failed"; }
+                
+                // Success Transition
+                document.getElementById('login').style.opacity = 0;
+                setTimeout(() => {
+                    document.getElementById('login').style.display='none';
+                    document.getElementById('dashboard').style.display='flex';
+                    render();
+                }, 500);
+                
+            } catch(e) { m.innerText="CONNECTION FAILED"; }
         }
 
         async function refresh() {
-            let r = await fetch(API+'/api/players', {headers:{'x-admin-auth':TOKEN}});
-            DB = (await r.json()).players;
-            render();
+            try {
+                let r = await fetch(API+'/api/players', {headers:{'x-admin-auth':TOKEN}});
+                DB = (await r.json()).players;
+                render();
+            } catch(e) { console.error(e); }
         }
 
         function render() {
             let l=document.getElementById('list'), s=document.getElementById('search').value.toLowerCase();
             l.innerHTML="";
             
-            DB.filter(p => (p.username||"").toLowerCase().includes(s) || p.productUserId.includes(s)).forEach(p => {
-                // FILTER OUT BAD IDs
-                if(p.productUserId === "undefined" || !p.productUserId) return;
+            if(DB.length === 0) {
+                l.innerHTML = `<div style="text-align:center; color:#555; margin-top:50px;">NO RECORDS FOUND</div>`;
+                return;
+            }
+
+            DB.filter(p => (p.username||"").toLowerCase().includes(s) || p.productUserId.includes(s)).forEach((p, i) => {
+                // FIXED: Filter out ghost/bad IDs
+                if(p.productUserId === "undefined" || !p.productUserId || p.productUserId.length < 5) return;
 
                 let div = document.createElement('div');
                 div.className = "player-row";
+                div.style.animationDelay = (i * 0.05) + "s"; // Stagger animation
                 
                 let badge = p.isBanned ? `<span class="badge b-banned">BANNED</span>` : `<span class="badge b-clean">CLEAN</span>`;
                 let action = p.isBanned 
-                    ? `<button onclick="unban('${p.productUserId}')" class="btn btn-ghost" style="color:var(--green); border-color:var(--green)">Unban</button>`
-                    : `<button onclick="openModal('${p.productUserId}', '${p.username}')" class="btn btn-danger">Ban</button>`;
+                    ? `<button onclick="unban('${p.productUserId}')" class="btn btn-ghost" style="color:var(--green); border-color:var(--green); font-size:0.8em;">REVOKE</button>`
+                    : `<button onclick="openModal('${p.productUserId}', '${p.username}')" class="btn btn-danger" style="font-size:0.8em;">SANCTION</button>`;
 
                 div.innerHTML = `
                     <div class="p-info">
                         <div class="p-avatar">${(p.username||"?")[0].toUpperCase()}</div>
                         <div>
-                            <div style="font-weight:bold; font-size:1.1em;">${p.username||"Unknown"}</div>
+                            <div style="font-weight:bold; font-size:1.1em; color:white;">${p.username||"Unknown"}</div>
                             <div style="font-family:monospace; color:var(--text-dim); font-size:0.8em;">${p.productUserId}</div>
                         </div>
                     </div>
                     <div style="display:flex; gap:15px; align-items:center;">
-                        <div style="font-size:0.9em; color:var(--text-dim);">💰 ${p.sheckles||0} | ⚙️ ${p.scrap||0}</div>
+                        <div style="font-size:0.9em; color:var(--text-dim); display:flex; gap:10px;">
+                            <span>💰 ${p.sheckles||0}</span> <span>⚙️ ${p.scrap||0}</span>
+                        </div>
                         ${badge}
                         ${action}
-                        <button onclick="del('${p.productUserId}')" class="btn btn-ghost" style="padding:5px 10px;">X</button>
+                        <button onclick="del('${p.productUserId}')" class="btn btn-ghost" style="padding:8px 12px;">✖</button>
                     </div>
                 `;
                 l.appendChild(div);
@@ -233,14 +277,14 @@
         }
 
         async function unban(id) {
-            if(confirm("Unban user?")) {
+            if(confirm("Confirm Revoke Sanction?")) {
                 await fetch(API+'/api/unban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})});
                 refresh();
             }
         }
         
         async function del(id) {
-            if(confirm("Delete record? This cannot be undone.")) {
+            if(confirm("⚠ PERMANENTLY DELETE RECORD? This cannot be undone.")) {
                 await fetch(API+'/api/delete', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})});
                 refresh();
             }
