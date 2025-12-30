@@ -1,60 +1,38 @@
 const express = require('express');
-const axios = require('axios');
-const dotenv = require('dotenv');
 const cors = require('cors');
 const mongoose = require('mongoose');
-
-dotenv.config();
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD; 
-
 // --- CONFIGURATION ---
-const EOS_CONFIG = {
-    deploymentId: (process.env.EOS_DEPLOYMENT_ID || "").trim(),
-    clientId: (process.env.EOS_CLIENT_ID || "").trim(),
-    clientSecret: (process.env.EOS_CLIENT_SECRET || "").trim(),
-    apiUrl: 'https://api.epicgames.dev'
-};
+const PORT = process.env.PORT || 3000;
+// Using the connection string you provided (Recommend keeping this in .env on Render)
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://BOSS:ilikemath@cluster0.0c1y6c.mongodb.net/?appName=Cluster0";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "ilikemath"; // Ensure this matches MirrorVRConfig
 
-// --- HEALTH CHECK ---
-app.get('/', (req, res) => {
-    res.send(`✅ SERVER IS LIVE! Version: SERIALIZATION_FIX_V3.0`);
-});
-
-mongoose.connect(process.env.MONGODB_URI)
+// --- CONNECT TO MONGODB ---
+mongoose.connect(MONGODB_URI)
     .then(() => console.log("✅ Connected to MongoDB"))
     .catch(err => console.error("❌ MongoDB Error:", err));
 
+// --- SCHEMA ---
 const PlayerSchema = new mongoose.Schema({
     productUserId: { type: String, required: true, unique: true },
     username: String,
     aliases: [String],
     firstSeen: { type: Date, default: Date.now },
     lastSeen: { type: Date, default: Date.now },
-    isBanned: { type: Boolean, default: false }
+    isBanned: { type: Boolean, default: false },
+    banReason: { type: String, default: "" }
 });
 const Player = mongoose.model('Player', PlayerSchema);
 
-async function getAccessToken() {
-    try {
-        const response = await axios.post(
-            `${EOS_CONFIG.apiUrl}/auth/v1/oauth/token`,
-            new URLSearchParams({ grant_type: 'client_credentials', deployment_id: EOS_CONFIG.deploymentId }),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              auth: { username: EOS_CONFIG.clientId, password: EOS_CONFIG.clientSecret } }
-        );
-        return response.data.access_token;
-    } catch (error) { throw new Error('EOS Auth Failed'); }
-}
-
+// --- MIDDLEWARE ---
 const verifyAdminPassword = (req, res, next) => {
     const provided = req.headers['x-admin-auth'];
-    if (ADMIN_PASSWORD && provided !== ADMIN_PASSWORD) {
+    if (provided !== ADMIN_PASSWORD) {
         return res.status(403).json({ success: false, error: "WRONG PASSWORD" });
     }
     next();
@@ -62,105 +40,80 @@ const verifyAdminPassword = (req, res, next) => {
 
 // --- ROUTES ---
 
+// 1. TRACK & CHECK (Called by Game Client on Join)
+// Returns { success: true, isBanned: true/false } so the game knows to kick immediately.
 app.post('/api/players/track', async (req, res) => {
-    const { productUserId, username } = req.body;
-    if (!productUserId) return res.status(400).json({ error: "Missing ID" });
-    await Player.findOneAndUpdate(
-        { productUserId }, 
-        { $set: { lastSeen: new Date(), username }, $addToSet: { aliases: username } }, 
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-    res.json({ success: true });
-});
-
-app.get('/api/players', verifyAdminPassword, async (req, res) => {
-    const players = await Player.find().sort({ lastSeen: -1 });
-    res.json({ success: true, players });
-});
-
-// --- BAN ROUTE (MANUAL STRINGIFY FIX) ---
-app.post('/api/sanctions/create', verifyAdminPassword, async (req, res) => {
     try {
-        const { productUserId, action, durationSeconds, justification } = req.body;
+        const { productUserId, username } = req.body;
+        if (!productUserId) return res.status(400).json({ error: "Missing ID" });
 
-        if (!productUserId || productUserId.trim() === "") {
-            return res.status(400).json({ success: false, error: "Missing ID" });
-        }
-
-        const accessToken = await getAccessToken();
-        const safeAction = action; 
-        const finalId = productUserId.trim();
-
-        // Create the object
-        const sanctionObject = {
-            subjectId: finalId, 
-            action: safeAction,
-            justification: justification || "Manual Ban", 
-            source: 'MANUAL', 
-            tags: ['banned']
-        };
-        
-        if (durationSeconds > 0) {
-            sanctionObject.expirationTimestamp = Math.floor(Date.now() / 1000) + durationSeconds;
-        }
-
-        // --- THE FIX: MANUAL STRINGIFY ---
-        // We put it in an array and turn it into text ourselves to prevent corruption
-        const payloadString = JSON.stringify([sanctionObject]);
-
-        console.log(`🔨 Processing Ban for: ${finalId}`);
-        console.log(`📤 Outgoing Payload: ${payloadString}`);
-
-        const response = await axios.post(
-            `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions`,
-            payloadString, 
+        const player = await Player.findOneAndUpdate(
+            { productUserId }, 
             { 
-                headers: { 
-                    'Authorization': `Bearer ${accessToken}`, 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json' 
-                } 
-            }
-        );
-
-        console.log("✅ EOS Success!");
-
-        await Player.findOneAndUpdate(
-            { productUserId: finalId }, 
-            { isBanned: true }, 
+                $set: { lastSeen: new Date(), username }, 
+                $addToSet: { aliases: username } 
+            }, 
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
-        
-        res.json({ success: true, data: response.data });
 
-    } catch (error) { 
-        const epicError = error.response?.data;
-        console.error("❌ EPIC ERROR:", JSON.stringify(epicError || error.message));
-
-        res.status(400).json({ 
-            success: false, 
-            error: "EPIC_API_ERROR",
-            debugInfo: "SERIALIZATION_FIX_V3.0", 
-            details: epicError 
-        }); 
+        res.json({ success: true, isBanned: player.isBanned });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
-app.post('/api/sanctions/remove', verifyAdminPassword, async (req, res) => {
+// 2. GET ALL PLAYERS (Called by Unity Editor)
+app.get('/api/players', verifyAdminPassword, async (req, res) => {
     try {
-        const { productUserId, referenceId } = req.body;
-        const accessToken = await getAccessToken();
-        if (referenceId) {
-            await axios.delete(
-                `${EOS_CONFIG.apiUrl}/sanctions/v1/${EOS_CONFIG.deploymentId}/sanctions/${referenceId}`,
-                { headers: { 'Authorization': `Bearer ${accessToken}` } }
-            );
-        }
-        if (productUserId) {
-            await Player.findOneAndUpdate({ productUserId }, { isBanned: false });
-        }
-        res.json({ success: true });
-    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+        const players = await Player.find().sort({ lastSeen: -1 });
+        res.json({ success: true, players });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
+
+// 3. BAN PLAYER (Called by Unity Editor)
+// Updates MongoDB directly.
+app.post('/api/ban', verifyAdminPassword, async (req, res) => {
+    try {
+        const { productUserId, reason } = req.body;
+        if (!productUserId) return res.status(400).json({ error: "Missing ID" });
+
+        console.log(`🔨 Banning Player: ${productUserId}`);
+
+        await Player.findOneAndUpdate(
+            { productUserId },
+            { isBanned: true, banReason: reason || "Banned by Admin" },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        res.json({ success: true, message: "Player Banned in MongoDB" });
+    } catch (err) {
+        console.error("❌ Ban Error:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 4. UNBAN PLAYER (Called by Unity Editor)
+app.post('/api/unban', verifyAdminPassword, async (req, res) => {
+    try {
+        const { productUserId } = req.body;
+        if (!productUserId) return res.status(400).json({ error: "Missing ID" });
+
+        console.log(`🔓 Unbanning Player: ${productUserId}`);
+
+        await Player.findOneAndUpdate(
+            { productUserId },
+            { isBanned: false, banReason: "" }
+        );
+
+        res.json({ success: true, message: "Player Unbanned in MongoDB" });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/', (req, res) => res.send(`✅ MONGO BAN SYSTEM ONLINE`));
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
