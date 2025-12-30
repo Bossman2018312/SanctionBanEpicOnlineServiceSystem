@@ -67,6 +67,10 @@
         .btn-danger { background: var(--red); color: white; }
         .btn-ghost { background: transparent; border: 1px solid var(--card-border); color: #ccc; }
         .btn-login { width: 100%; background: var(--accent); color: white; padding: 15px; font-size: 1em; }
+        
+        /* RESTORE BUTTON STYLE */
+        .btn-restore { width: 100%; background: rgba(255,255,255,0.05); border: 1px dashed var(--text-dim); color: var(--text-dim); padding: 12px; margin-top: 20px; cursor: none; }
+        .btn-restore:hover { background: rgba(139, 92, 246, 0.1); border-color: var(--accent); color: var(--accent); }
 
         .player-row {
             display: flex; align-items: center; justify-content: space-between;
@@ -86,7 +90,6 @@
         #login { position: fixed; inset: 0; background: #000; z-index: 50; display: flex; justify-content: center; align-items: center; }
         #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(10px); }
         
-        /* TIME GRID */
         .time-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .time-box input { text-align: center; font-size: 1.2em; font-weight: bold; margin: 0; }
         .time-label { text-align: center; font-size: 0.7em; color: var(--text-dim); margin-top: 5px; text-transform: uppercase; }
@@ -113,6 +116,9 @@
             <div style="color: var(--text-dim); font-size: 0.75em; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px;">MENU</div>
             <div style="padding: 12px; background: var(--accent); border-radius: 6px; margin-bottom: 5px; color: white; font-weight: 600; font-size: 0.9em; box-shadow: 0 0 15px var(--accent-glow);">Database</div>
             
+            <input type="file" id="backup-input" style="display:none" onchange="uploadBackup()">
+            <button onclick="document.getElementById('backup-input').click()" class="btn btn-restore">📂 RESTORE BACKUP</button>
+
             <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--card-border);">
                 <div style="font-size: 0.8em; color: var(--text-dim);">SYSTEM STATUS</div>
                 <div style="color: var(--green); font-weight: bold; font-size: 0.9em; margin-top: 5px;">● SECURE CONNECTION</div>
@@ -184,6 +190,23 @@
             } catch(e) { console.error(e); }
         }
 
+        async function uploadBackup() {
+            let file = document.getElementById('backup-input').files[0];
+            if(!file) return;
+            
+            let fd = new FormData();
+            fd.append('backupFile', file);
+
+            if(confirm("⚠ WARNING: RESTORING WILL OVERWRITE PLAYER DATA.\nAre you sure?")) {
+                try {
+                    let r = await fetch(API+'/api/restore', { method:'POST', headers:{'x-admin-auth':TOKEN}, body:fd });
+                    let d = await r.json();
+                    if(d.success) { alert(`✅ SUCCESS: Restored ${d.count} players!`); refresh(); }
+                    else alert("RESTORE FAILED: " + d.error);
+                } catch(e) { alert("UPLOAD ERROR"); }
+            }
+        }
+
         function render() {
             let l=document.getElementById('list'), s=document.getElementById('search').value.toLowerCase();
             l.innerHTML="";
@@ -229,14 +252,11 @@
         async function commitBan() {
             if(!SEL) return;
             let r = document.getElementById('m-reason').value;
-            
-            // TIME CALCULATION
             let mon = parseInt(document.getElementById('t-month').value) || 0;
             let day = parseInt(document.getElementById('t-day').value) || 0;
             let hour = parseInt(document.getElementById('t-hour').value) || 0;
             let min = parseInt(document.getElementById('t-min').value) || 0;
             
-            // 30 Days per month approx
             let totalMin = (mon * 43200) + (day * 1440) + (hour * 60) + min;
 
             await fetch(API+'/api/ban', {
