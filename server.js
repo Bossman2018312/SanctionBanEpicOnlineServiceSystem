@@ -6,7 +6,14 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+// 1. SERVE STATIC FILES
 app.use(express.static(path.join(__dirname, 'public')));
+
+// 2. FORCE DASHBOARD LOAD (Fixes "Cannot GET /")
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 
@@ -42,7 +49,7 @@ async function checkExpirations() {
     );
 }
 
-// 1. TRACK PLAYER (Fixed Duplicates)
+// ROUTES
 app.post('/api/players/track', async (req, res) => {
     try {
         const { productUserId, username, sheckles, scrap } = req.body;
@@ -50,11 +57,10 @@ app.post('/api/players/track', async (req, res) => {
 
         await checkExpirations();
 
-        // Use updateOne with upsert to prevent duplicates
         const updateData = {
             username: username,
             lastSeen: new Date(),
-            $addToSet: { aliases: username } // Only add alias if unique
+            $addToSet: { aliases: username }
         };
         
         if (sheckles !== undefined) updateData.sheckles = sheckles;
@@ -104,7 +110,6 @@ app.post('/api/unban', verifyAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-// NEW: DELETE USER ROUTE
 app.post('/api/delete', verifyAdmin, async (req, res) => {
     try {
         await Player.findOneAndDelete({ productUserId: req.body.productUserId });
