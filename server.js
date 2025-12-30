@@ -1,23 +1,20 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const path = require('path');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
+app.use(express.static(path.join(__dirname, 'public')));
 
-// --- CONFIGURATION ---
 const PORT = process.env.PORT || 3000;
-// Using the connection string you provided (Recommend keeping this in .env on Render)
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://BOSS:ilikemath@cluster0.0c1y6c.mongodb.net/?appName=Cluster0";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "ilikemath"; // Ensure this matches MirrorVRConfig
+const connectOptions = { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 };
 
-// --- CONNECT TO MONGODB ---
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log("✅ Connected to MongoDB"))
-    .catch(err => console.error("❌ MongoDB Error:", err));
+mongoose.connect(process.env.MONGODB_URI, connectOptions)
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch(err => console.error("❌ MongoDB Fail:", err));
 
-// --- SCHEMA ---
 const PlayerSchema = new mongoose.Schema({
     productUserId: { type: String, required: true, unique: true },
     username: String,
@@ -25,95 +22,88 @@ const PlayerSchema = new mongoose.Schema({
     firstSeen: { type: Date, default: Date.now },
     lastSeen: { type: Date, default: Date.now },
     isBanned: { type: Boolean, default: false },
-    banReason: { type: String, default: "" }
+    banReason: { type: String, default: "" },
+    banExpiresAt: { type: Date, default: null },
+    // --- NEW STATS ---
+    sheckles: { type: Number, default: 0 },
+    scrap: { type: Number, default: 0 },
+    banCount: { type: Number, default: 0 }
 });
 const Player = mongoose.model('Player', PlayerSchema);
 
-// --- MIDDLEWARE ---
-const verifyAdminPassword = (req, res, next) => {
-    const provided = req.headers['x-admin-auth'];
-    if (provided !== ADMIN_PASSWORD) {
-        return res.status(403).json({ success: false, error: "WRONG PASSWORD" });
-    }
+const verifyAdmin = (req, res, next) => {
+    if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) return res.status(403).json({ error: "Access Denied" });
     next();
 };
 
 // --- ROUTES ---
 
-// 1. TRACK & CHECK (Called by Game Client on Join)
-// Returns { success: true, isBanned: true/false } so the game knows to kick immediately.
+// 1. TRACK & UPDATE PLAYER (Now saves Money & Scrap)
 app.post('/api/players/track', async (req, res) => {
     try {
-        const { productUserId, username } = req.body;
-        if (!productUserId) return res.status(400).json({ error: "Missing ID" });
+        const { productUserId, username, sheckles, scrap } = req.body;
+        if (!productUserId) return res.status(400).json({ error: "No ID" });
 
-        const player = await Player.findOneAndUpdate(
-            { productUserId }, 
+        let player = await Player.findOne({ productUserId });
+
+        // Auto-Unban Logic
+        if (player && player.isBanned && player.banExpiresAt && new Date() > new Date(player.banExpiresAt)) {
+            player.isBanned = false;
+            player.banReason = "";
+            player.banExpiresAt = null;
+        }
+
+        if (!player) {
+            player = new Player({ productUserId, username, aliases: [username], sheckles: sheckles || 0, scrap: scrap || 0 });
+        } else {
+            player.username = username;
+            player.lastSeen = new Date();
+            if (!player.aliases.includes(username)) player.aliases.push(username);
+            
+            // Update Currency (Only if provided)
+            if (sheckles !== undefined) player.sheckles = sheckles;
+            if (scrap !== undefined) player.scrap = scrap;
+        }
+        await player.save();
+
+        res.json({ success: true, isBanned: player.isBanned, banReason: player.banReason });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/players', verifyAdmin, async (req, res) => {
+    const players = await Player.find().sort({ lastSeen: -1 });
+    res.json({ success: true, players });
+});
+
+// 2. BAN ROUTE (Increments Ban Count)
+app.post('/api/ban', verifyAdmin, async (req, res) => {
+    try {
+        const { productUserId, reason, durationMinutes } = req.body;
+        
+        let expireDate = null;
+        if (durationMinutes && durationMinutes > 0) {
+            expireDate = new Date();
+            expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
+        }
+
+        // Find and update, incrementing banCount by 1
+        await Player.findOneAndUpdate(
+            { productUserId },
             { 
-                $set: { lastSeen: new Date(), username }, 
-                $addToSet: { aliases: username } 
-            }, 
-            { upsert: true, new: true, setDefaultsOnInsert: true }
+                isBanned: true, 
+                banReason: reason || "Admin Ban",
+                banExpiresAt: expireDate,
+                $inc: { banCount: 1 } // Adds 1 to total bans
+            },
+            { upsert: true }
         );
-
-        res.json({ success: true, isBanned: player.isBanned });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, error: err.message });
-    }
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. GET ALL PLAYERS (Called by Unity Editor)
-app.get('/api/players', verifyAdminPassword, async (req, res) => {
-    try {
-        const players = await Player.find().sort({ lastSeen: -1 });
-        res.json({ success: true, players });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
+app.post('/api/unban', verifyAdmin, async (req, res) => {
+    await Player.findOneAndUpdate({ productUserId: req.body.productUserId }, { isBanned: false, banReason: "", banExpiresAt: null });
+    res.json({ success: true });
 });
-
-// 3. BAN PLAYER (Called by Unity Editor)
-// Updates MongoDB directly.
-app.post('/api/ban', verifyAdminPassword, async (req, res) => {
-    try {
-        const { productUserId, reason } = req.body;
-        if (!productUserId) return res.status(400).json({ error: "Missing ID" });
-
-        console.log(`🔨 Banning Player: ${productUserId}`);
-
-        await Player.findOneAndUpdate(
-            { productUserId },
-            { isBanned: true, banReason: reason || "Banned by Admin" },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
-
-        res.json({ success: true, message: "Player Banned in MongoDB" });
-    } catch (err) {
-        console.error("❌ Ban Error:", err);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// 4. UNBAN PLAYER (Called by Unity Editor)
-app.post('/api/unban', verifyAdminPassword, async (req, res) => {
-    try {
-        const { productUserId } = req.body;
-        if (!productUserId) return res.status(400).json({ error: "Missing ID" });
-
-        console.log(`🔓 Unbanning Player: ${productUserId}`);
-
-        await Player.findOneAndUpdate(
-            { productUserId },
-            { isBanned: false, banReason: "" }
-        );
-
-        res.json({ success: true, message: "Player Unbanned in MongoDB" });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.get('/', (req, res) => res.send(`✅ MONGO BAN SYSTEM ONLINE`));
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
