@@ -3,235 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GORILLA WARFARE // COMMAND</title>
+    <title>ARIX // ADMIN</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap');
 
         :root {
-            --bg: #0d0d0d;
-            --row-bg: #1a1a1a;
-            --text: #ffffff;
-            --teal: #00ffcc;
-            --teal-dim: rgba(0, 255, 204, 0.1);
-            --red: #ff003c;
-            --red-dim: rgba(255, 0, 60, 0.1);
-            --font-main: 'Rajdhani', sans-serif;
+            /* Purple/Blue Theme from Image */
+            --bg-grad-1: #1a0b2e;
+            --bg-grad-2: #110e1b;
+            --card-bg: rgba(30, 27, 46, 0.7);
+            --card-border: rgba(255, 255, 255, 0.05);
+            --accent: #6d28d9; /* Deep Purple */
+            --accent-glow: #8b5cf6;
+            --text-main: #ffffff;
+            --text-dim: #9ca3af;
+            --green: #10b981;
+            --red: #ef4444;
+            --font-main: 'Inter', sans-serif;
             --font-mono: 'JetBrains Mono', monospace;
         }
 
         body {
-            background-color: var(--bg);
-            color: var(--text);
+            background: linear-gradient(135deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 100%);
+            color: var(--text-main);
             font-family: var(--font-main);
             margin: 0;
             height: 100vh;
             overflow: hidden;
-            cursor: none; /* HIDES DEFAULT CURSOR EVERYWHERE */
-        }
-
-        /* --- PITCH WHITE CUSTOM CURSOR --- */
-        #cursor {
-            position: fixed;
-            top: 0; left: 0;
-            width: 4px; height: 4px; /* 4x4 Pixels */
-            background: #ffffff; /* PITCH WHITE */
-            pointer-events: none;
-            z-index: 9999;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 8px #ffffff; /* White Glow */
-            mix-blend-mode: difference; /* Ensures visibility on white backgrounds */
-        }
-
-        /* --- UI STRUCTURE --- */
-        #login-screen, #dashboard {
-            position: absolute;
-            width: 100%; height: 100%;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-        }
-
-        /* --- LOGIN --- */
-        #login-box {
-            background: var(--row-bg);
-            padding: 40px;
-            border: 1px solid #333;
-            width: 400px;
-            text-align: center;
-            box-shadow: 0 0 30px rgba(0,0,0,0.5);
-        }
-        
-        input {
-            width: 100%; background: #000; border: 1px solid #333; 
-            color: white; padding: 15px; margin-bottom: 15px; 
-            font-family: var(--font-mono); box-sizing: border-box;
-            outline: none; transition: 0.2s;
-            cursor: none !important; /* HIDES I-BEAM CURSOR */
-        }
-        input:focus { border-color: var(--teal); box-shadow: 0 0 15px var(--teal-dim); }
-
-        button {
-            width: 100%; padding: 15px; font-family: var(--font-mono);
-            font-weight: 800; text-transform: uppercase; cursor: none;
-            border: 1px solid var(--teal); background: var(--teal-dim); color: var(--teal);
-            transition: 0.2s;
-        }
-        button:hover { background: var(--teal); color: black; }
-
-        /* --- DASHBOARD LIST --- */
-        .list-container {
-            width: 80%; height: 70%;
-            overflow-y: auto;
-            padding-right: 10px;
-        }
-
-        /* The Reference Image Look */
-        .row {
-            display: flex; align-items: center; justify-content: space-between;
-            background: var(--row-bg);
-            padding: 20px 30px;
-            margin-bottom: 8px;
-            border: 1px solid transparent;
-            transition: transform 0.2s, filter 0.2s;
-        }
-        
-        /* Motion Blur Effect */
-        .row:hover {
-            transform: translateX(5px);
-            border-color: #333;
-            filter: blur(0.5px); 
-        }
-
-        .user-info { display: flex; flex-direction: column; }
-        .u-name { font-family: var(--font-mono); font-size: 1.5em; font-weight: 800; letter-spacing: -1px; }
-        .u-id { color: #555; font-size: 0.8em; font-family: monospace; margin-top: 4px; }
-
-        .badges { display: flex; gap: 15px; align-items: center; }
-
-        /* Status Pills */
-        .pill {
-            padding: 5px 15px;
-            font-family: var(--font-mono);
-            font-size: 0.9em;
-            font-weight: 800;
-            border: 1px solid;
-            letter-spacing: 1px;
-        }
-        .pill-active { color: var(--teal); border-color: var(--teal); background: var(--teal-dim); }
-        .pill-banned { color: var(--red); border-color: var(--red); background: var(--red-dim); }
-
-        /* Action Buttons */
-        .btn-small {
-            padding: 5px 20px;
-            border: 1px solid var(--red);
-            color: var(--red);
-            background: transparent;
-            font-weight: 800;
-            font-family: var(--font-mono);
+            display: flex;
             cursor: none;
         }
-        .btn-small:hover { background: var(--red); color: white; }
 
-        .btn-unban { border-color: var(--teal); color: var(--teal); }
-        .btn-unban:hover { background: var(--teal); color: black; }
+        /* --- CUSTOM CURSOR --- */
+        #cursor {
+            position: fixed; top: 0; left: 0; width: 8px; height: 8px;
+            background: white; border-radius: 50%; pointer-events: none;
+            z-index: 9999; mix-blend-mode: overlay;
+            transform: translate(-50%, -50%);
+            transition: width 0.2s, height 0.2s;
+        }
+        body:hover #cursor { width: 12px; height: 12px; }
 
+        /* --- LAYOUT --- */
+        #sidebar {
+            width: 250px; background: rgba(0,0,0,0.2);
+            border-right: 1px solid var(--card-border);
+            display: flex; flex-direction: column; padding: 20px;
+        }
+
+        #main { flex: 1; padding: 40px; display: flex; flex-direction: column; }
+
+        /* --- COMPONENTS --- */
+        h1, h2 { margin: 0; font-weight: 800; letter-spacing: -0.5px; }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        /* --- LIST --- */
+        .search-bar {
+            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--card-border);
+            padding: 15px; border-radius: 8px; color: white; font-family: var(--font-main);
+            outline: none; margin-bottom: 20px; cursor: none;
+        }
+        .search-bar:focus { border-color: var(--accent-glow); }
+
+        .player-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px; margin-bottom: 10px; border-radius: 8px;
+            background: rgba(255,255,255,0.02); transition: 0.2s;
+            border: 1px solid transparent;
+        }
+        .player-row:hover { background: rgba(255,255,255,0.05); transform: translateY(-2px); border-color: rgba(255,255,255,0.1); }
+
+        .p-info { display: flex; align-items: center; gap: 15px; }
+        .p-avatar { width: 40px; height: 40px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        
+        .badge { padding: 4px 10px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; }
+        .b-clean { background: rgba(16, 185, 129, 0.1); color: var(--green); }
+        .b-banned { background: rgba(239, 68, 68, 0.1); color: var(--red); }
+
+        .btn { padding: 8px 16px; border-radius: 6px; border: none; font-weight: 600; cursor: none; transition: 0.2s; }
+        .btn-danger { background: var(--red); color: white; }
+        .btn-ghost { background: transparent; border: 1px solid var(--card-border); color: #aaa; }
+        .btn-ghost:hover { border-color: white; color: white; }
+
+        /* --- LOGIN --- */
+        #login { position: fixed; inset: 0; background: var(--bg-grad-1); z-index: 50; display: flex; justify-content: center; align-items: center; }
+        
         /* --- MODAL --- */
-        #modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
-            justify-content: center; align-items: center; z-index: 100;
-        }
-        .modal-box {
-            background: #000; border: 1px solid var(--red);
-            padding: 40px; width: 450px;
-            box-shadow: 0 0 50px var(--red-dim);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #000; }
-        ::-webkit-scrollbar-thumb { background: #333; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--teal); }
-
+        #modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; }
+        
     </style>
 </head>
 <body>
-
     <div id="cursor"></div>
 
-    <div id="login-screen">
-        <h1 style="font-family: var(--font-mono); letter-spacing: -2px; font-size: 3em; margin-bottom: 10px;">GORILLA<span style="color:var(--teal)">WARFARE</span></h1>
-        <div id="login-box">
-            <input type="text" id="api-url" value="https://sanctionbanepiconlineservicesystem.onrender.com" placeholder="SERVER">
-            <input type="password" id="pass" placeholder="PASSWORD">
-            <button onclick="auth()">AUTHENTICATE</button>
-            <p id="msg" style="color:var(--red); font-size:0.8em; margin-top:10px;"></p>
+    <div id="login">
+        <div class="card" style="width: 350px; text-align: center;">
+            <h1 style="margin-bottom: 20px;">ARIX <span style="color:var(--accent-glow)">ADMIN</span></h1>
+            <input type="text" id="api" value="https://sanctionbanepiconlineservicesystem.onrender.com" class="search-bar" placeholder="Server">
+            <input type="password" id="pass" class="search-bar" placeholder="Password">
+            <button onclick="auth()" class="btn" style="width:100%; background:var(--accent); color:white; padding:15px;">LOGIN</button>
+            <p id="msg" style="color:var(--red); margin-top:10px; font-size:0.8em;"></p>
         </div>
     </div>
 
-    <div id="dashboard" style="display:none;">
-        <div style="width: 80%; display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px;">
-            <div>
-                <h2 style="margin:0; font-family: var(--font-mono);">DATABASE // PLAYERS</h2>
-                <div style="color:#666; font-size:0.9em;">ENTRIES: <span id="count" style="color:white">0</span></div>
+    <div id="dashboard" style="display:none; width:100%; height:100%;">
+        <div id="sidebar">
+            <h2 style="margin-bottom: 40px;">ARIX</h2>
+            <div style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 10px;">GENERAL</div>
+            <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; margin-bottom: 5px;">Dashboard</div>
+            <div style="padding: 10px; color: var(--text-dim);">Users</div>
+            <div style="padding: 10px; color: var(--text-dim);">Settings</div>
+            <div style="margin-top: auto; padding: 10px; border-top: 1px solid var(--card-border);">
+                <div style="font-size: 0.8em; color: var(--text-dim);">STATUS</div>
+                <div style="color: var(--green);">Connected</div>
             </div>
-            <button onclick="refresh()" style="width:auto; border-color:#444; color:#888;">REFRESH SIGNAL</button>
         </div>
 
-        <div id="list" class="list-container"></div>
+        <div id="main">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                <h1>Player Database</h1>
+                <button onclick="refresh()" class="btn btn-ghost">REFRESH</button>
+            </div>
+
+            <div class="card" style="margin-bottom: 20px;">
+                <input type="text" id="search" onkeyup="render()" class="search-bar" style="margin:0;" placeholder="Search Username or ID...">
+            </div>
+
+            <div id="list" style="overflow-y: auto; flex: 1;"></div>
+        </div>
     </div>
 
     <div id="modal">
-        <div class="modal-box">
-            <h2 style="color:var(--red); font-family:var(--font-mono); margin-top:0;">INITIATE SANCTION</h2>
-            <div style="color:#666; margin-bottom:20px;">TARGET: <span id="m-target" style="color:white"></span></div>
+        <div class="card" style="width: 400px;">
+            <h2 style="color:var(--red); margin-bottom: 5px;">Sanction User</h2>
+            <div style="color:var(--text-dim); margin-bottom: 20px;">Target: <span id="m-target" style="color:white"></span></div>
             
-            <input type="text" id="m-reason" placeholder="REASON FOR BAN">
-            <input type="number" id="m-time" placeholder="DURATION (MINUTES) - 0 FOR PERMA">
+            <input type="text" id="m-reason" class="search-bar" placeholder="Reason">
+            <input type="number" id="m-time" class="search-bar" placeholder="Minutes (0 = Perma)">
             
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button onclick="closeModal()" style="border-color:#333; color:#666;">CANCEL</button>
-                <button onclick="commitBan()" style="border-color:var(--red); color:var(--red); background:var(--red-dim);">EXECUTE</button>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="closeModal()" class="btn btn-ghost" style="flex:1;">Cancel</button>
+                <button onclick="commitBan()" class="btn btn-danger" style="flex:1;">Execute</button>
             </div>
         </div>
     </div>
 
     <script>
-        // --- PITCH WHITE LERPING CURSOR ---
-        const cursor = document.getElementById('cursor');
-        let mouseX = 0, mouseY = 0;
-        let cursorX = 0, cursorY = 0;
+        // CURSOR
+        const c = document.getElementById('cursor');
+        document.addEventListener('mousemove', e => { c.style.left = e.clientX+'px'; c.style.top = e.clientY+'px'; });
 
-        document.addEventListener('mousemove', (e) => {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-        });
-
-        function animateCursor() {
-            // Smooth lerp (15% interpolation)
-            cursorX += (mouseX - cursorX) * 0.15;
-            cursorY += (mouseY - cursorY) * 0.15;
-            
-            cursor.style.left = cursorX + 'px';
-            cursor.style.top = cursorY + 'px';
-            
-            requestAnimationFrame(animateCursor);
-        }
-        animateCursor();
-
-        // --- API LOGIC ---
-        let API="", TOKEN="", DB=[];
+        // LOGIC
+        let API="", TOKEN="", DB=[], SEL="";
 
         async function auth() {
-            let u = document.getElementById('api-url').value.replace(/\/$/,"");
+            let u = document.getElementById('api').value.replace(/\/$/,"");
             let p = document.getElementById('pass').value;
             try {
                 let r = await fetch(u+'/api/players', {headers:{'x-admin-auth':p}});
-                if(!r.ok) throw "CONNECTION REFUSED";
+                if(!r.ok) throw "Fail";
                 API=u; TOKEN=p; DB=(await r.json()).players;
-                document.getElementById('login-screen').style.display='none';
+                document.getElementById('login').style.display='none';
                 document.getElementById('dashboard').style.display='flex';
                 render();
-            } catch(e) { document.getElementById('msg').innerText = "INVALID CREDENTIALS"; }
+            } catch(e) { document.getElementById('msg').innerText="Connection Failed"; }
         }
 
         async function refresh() {
@@ -241,78 +184,64 @@
         }
 
         function render() {
-            let l = document.getElementById('list'); l.innerHTML="";
-            document.getElementById('count').innerText = DB.length;
+            let l=document.getElementById('list'), s=document.getElementById('search').value.toLowerCase();
+            l.innerHTML="";
             
-            DB.forEach(p => {
-                let row = document.createElement('div');
-                row.className = "row";
+            DB.filter(p => (p.username||"").toLowerCase().includes(s) || p.productUserId.includes(s)).forEach(p => {
+                // FILTER OUT BAD IDs
+                if(p.productUserId === "undefined" || !p.productUserId) return;
+
+                let div = document.createElement('div');
+                div.className = "player-row";
                 
-                let status = p.isBanned 
-                    ? `<div class="pill pill-banned">BANNED</div>` 
-                    : `<div class="pill pill-active">ACTIVE</div>`;
+                let badge = p.isBanned ? `<span class="badge b-banned">BANNED</span>` : `<span class="badge b-clean">CLEAN</span>`;
+                let action = p.isBanned 
+                    ? `<button onclick="unban('${p.productUserId}')" class="btn btn-ghost" style="color:var(--green); border-color:var(--green)">Unban</button>`
+                    : `<button onclick="openModal('${p.productUserId}', '${p.username}')" class="btn btn-danger">Ban</button>`;
 
-                let btn = p.isBanned
-                    ? `<button class="btn-small btn-unban" onclick="unban('${p.productUserId}')">REVOKE</button>`
-                    : `<button class="btn-small" onclick="openModal('${p.productUserId}', '${p.username}')">BAN</button>`;
-
-                let del = `<button class="btn-small" style="border-color:#333; color:#444; margin-left:10px;" onclick="del('${p.productUserId}')">DEL</button>`;
-
-                row.innerHTML = `
-                    <div class="user-info">
-                        <div class="u-name">${p.username || "UNKNOWN"}</div>
-                        <div class="u-id">${p.productUserId}</div>
-                        <div style="font-size:0.8em; color:#444; margin-top:5px;">
-                            💰 ${p.sheckles || 0} | ⚙️ ${p.scrap || 0}
+                div.innerHTML = `
+                    <div class="p-info">
+                        <div class="p-avatar">${(p.username||"?")[0].toUpperCase()}</div>
+                        <div>
+                            <div style="font-weight:bold; font-size:1.1em;">${p.username||"Unknown"}</div>
+                            <div style="font-family:monospace; color:var(--text-dim); font-size:0.8em;">${p.productUserId}</div>
                         </div>
                     </div>
-                    <div class="badges">
-                        ${status}
-                        ${btn}
-                        ${del}
+                    <div style="display:flex; gap:15px; align-items:center;">
+                        <div style="font-size:0.9em; color:var(--text-dim);">💰 ${p.sheckles||0} | ⚙️ ${p.scrap||0}</div>
+                        ${badge}
+                        ${action}
+                        <button onclick="del('${p.productUserId}')" class="btn btn-ghost" style="padding:5px 10px;">X</button>
                     </div>
                 `;
-                l.appendChild(row);
+                l.appendChild(div);
             });
         }
 
-        let SEL_ID = "";
-        function openModal(id, name) {
-            SEL_ID = id;
-            document.getElementById('m-target').innerText = name;
-            document.getElementById('modal').style.display = 'flex';
-        }
-        function closeModal() { document.getElementById('modal').style.display = 'none'; }
+        function openModal(id, name) { SEL=id; document.getElementById('m-target').innerText=name; document.getElementById('modal').style.display='flex'; }
+        function closeModal() { document.getElementById('modal').style.display='none'; }
 
         async function commitBan() {
-            let reason = document.getElementById('m-reason').value;
-            let time = document.getElementById('m-time').value;
+            if(!SEL) return;
+            let r = document.getElementById('m-reason').value;
+            let m = document.getElementById('m-time').value;
             await fetch(API+'/api/ban', {
-                method:'POST', 
-                headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, 
-                body:JSON.stringify({productUserId: SEL_ID, reason: reason, durationMinutes: time})
+                method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN},
+                body:JSON.stringify({productUserId:SEL, reason:r, durationMinutes:m})
             });
             closeModal(); refresh();
         }
 
         async function unban(id) {
-            if(confirm("REVOKE SANCTION?")) {
-                await fetch(API+'/api/unban', {
-                    method:'POST', 
-                    headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, 
-                    body:JSON.stringify({productUserId: id})
-                });
+            if(confirm("Unban user?")) {
+                await fetch(API+'/api/unban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})});
                 refresh();
             }
         }
-
+        
         async function del(id) {
-            if(confirm("DELETE USER PERMANENTLY?")) {
-                await fetch(API+'/api/delete', {
-                    method:'POST', 
-                    headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, 
-                    body:JSON.stringify({productUserId: id})
-                });
+            if(confirm("Delete record? This cannot be undone.")) {
+                await fetch(API+'/api/delete', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})});
                 refresh();
             }
         }
