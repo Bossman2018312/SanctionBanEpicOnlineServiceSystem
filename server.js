@@ -9,36 +9,41 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
-const connectOptions = { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 };
 
-mongoose.connect(process.env.MONGODB_URI, connectOptions)
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => console.log("✅ MongoDB Connected"))
     .catch(err => console.error("❌ MongoDB Fail:", err));
 
+// --- UPDATED SCHEMA ---
 const PlayerSchema = new mongoose.Schema({
     productUserId: { type: String, required: true, unique: true },
     username: String,
     aliases: [String],
     firstSeen: { type: Date, default: Date.now },
     lastSeen: { type: Date, default: Date.now },
+    
+    // Ban Info
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: "" },
     banExpiresAt: { type: Date, default: null },
-    // --- NEW STATS ---
+    banCount: { type: Number, default: 0 }, // New: Tracks total bans
+
+    // Economy
     sheckles: { type: Number, default: 0 },
-    scrap: { type: Number, default: 0 },
-    banCount: { type: Number, default: 0 }
+    scrap: { type: Number, default: 0 }
 });
 const Player = mongoose.model('Player', PlayerSchema);
 
 const verifyAdmin = (req, res, next) => {
-    if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) return res.status(403).json({ error: "Access Denied" });
+    if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) 
+        return res.status(403).json({ error: "Access Denied" });
     next();
 };
 
 // --- ROUTES ---
 
-// 1. TRACK & UPDATE PLAYER (Now saves Money & Scrap)
+// 1. TRACK & UPDATE PLAYER
 app.post('/api/players/track', async (req, res) => {
     try {
         const { productUserId, username, sheckles, scrap } = req.body;
@@ -47,26 +52,34 @@ app.post('/api/players/track', async (req, res) => {
         let player = await Player.findOne({ productUserId });
 
         // Auto-Unban Logic
-        if (player && player.isBanned && player.banExpiresAt && new Date() > new Date(player.banExpiresAt)) {
-            player.isBanned = false;
-            player.banReason = "";
-            player.banExpiresAt = null;
+        if (player && player.isBanned && player.banExpiresAt) {
+            if (new Date() > new Date(player.banExpiresAt)) {
+                player.isBanned = false;
+                player.banReason = "";
+                player.banExpiresAt = null;
+            }
         }
 
         if (!player) {
-            player = new Player({ productUserId, username, aliases: [username], sheckles: sheckles || 0, scrap: scrap || 0 });
+            player = new Player({ 
+                productUserId, 
+                username, 
+                aliases: [username], 
+                sheckles: sheckles || 0, 
+                scrap: scrap || 0 
+            });
         } else {
             player.username = username;
             player.lastSeen = new Date();
             if (!player.aliases.includes(username)) player.aliases.push(username);
             
-            // Update Currency (Only if provided)
+            // Update Money
             if (sheckles !== undefined) player.sheckles = sheckles;
             if (scrap !== undefined) player.scrap = scrap;
         }
         await player.save();
 
-        res.json({ success: true, isBanned: player.isBanned, banReason: player.banReason });
+        res.json({ success: true, isBanned: player.isBanned });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -75,25 +88,23 @@ app.get('/api/players', verifyAdmin, async (req, res) => {
     res.json({ success: true, players });
 });
 
-// 2. BAN ROUTE (Increments Ban Count)
+// 2. BAN ROUTE (Increments Count)
 app.post('/api/ban', verifyAdmin, async (req, res) => {
     try {
         const { productUserId, reason, durationMinutes } = req.body;
-        
         let expireDate = null;
-        if (durationMinutes && durationMinutes > 0) {
+        if (durationMinutes > 0) {
             expireDate = new Date();
             expireDate.setMinutes(expireDate.getMinutes() + parseInt(durationMinutes));
         }
 
-        // Find and update, incrementing banCount by 1
         await Player.findOneAndUpdate(
             { productUserId },
             { 
                 isBanned: true, 
                 banReason: reason || "Admin Ban",
                 banExpiresAt: expireDate,
-                $inc: { banCount: 1 } // Adds 1 to total bans
+                $inc: { banCount: 1 } // Increases ban count by 1
             },
             { upsert: true }
         );
