@@ -5,6 +5,8 @@ const path = require('path');
 const cron = require('node-cron');
 
 const app = express();
+
+// TRUST RENDER PROXY (Fixes IP Rate Limiting issues)
 app.set('trust proxy', 1); 
 
 app.use(express.json());
@@ -79,4 +81,38 @@ async function createSnapshot(customName) {
             const toDelete = allBackups.slice(30).map(b => b._id);
             await Backup.deleteMany({ _id: { $in: toDelete } });
         }
-    } catch
+    } catch (e) { console.error("Snapshot Failed:", e); }
+}
+
+// --- ALL ROUTES BLOCKED ---
+app.get('/api/stats', verifyAdmin, async (req, res) => {});
+app.get('/api/players', verifyAdmin, async (req, res) => {});
+app.post('/api/backups/create', verifyAdmin, async (req, res) => {});
+app.get('/api/backups', verifyAdmin, async (req, res) => {});
+app.get('/api/backups/:id', verifyAdmin, async (req, res) => {});
+app.post('/api/backups/restore/:id', verifyAdmin, async (req, res) => {});
+app.delete('/api/backups/:id', verifyAdmin, async (req, res) => {});
+app.post('/api/ban', verifyAdmin, async (req, res) => {});
+app.post('/api/unban', verifyAdmin, async (req, res) => {});
+app.post('/api/delete', verifyAdmin, async (req, res) => {});
+
+// TRACKING STILL WORKS (Game Data Only)
+app.post('/api/players/track', async (req, res) => {
+    try {
+        let { productUserId, username, sheckles, scrap } = req.body;
+        if (!productUserId || productUserId.length < 5) return res.status(400).json({ error: "Invalid ID" });
+        const updateData = { lastSeen: new Date() };
+        if (username && username !== "Checking..." && username !== "Unknown") {
+            updateData.username = username;
+            updateData.$addToSet = { aliases: username };
+        }
+        if (sheckles !== undefined) updateData.sheckles = sheckles;
+        if (scrap !== undefined) updateData.scrap = scrap;
+        const player = await Player.findOneAndUpdate({ $or: [{ productUserId: productUserId }, { playerId: productUserId }] }, updateData, { new: true, upsert: true, setDefaultsOnInsert: true });
+        if (!player.productUserId) { player.productUserId = productUserId; await player.save(); }
+        res.json({ success: true, isBanned: player.isBanned });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// END OF FILE - MAKE SURE THIS LINE IS COPIED
