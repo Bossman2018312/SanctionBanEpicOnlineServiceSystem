@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GORILLA WARFARE // ADMIN</title>
+    <title>GORILLA WARFARE // COMMAND</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap');
         :root {
@@ -12,76 +12,99 @@
             --text-main: #ffffff; --text-dim: #888; --green: #10b981; --red: #ef4444;
             --font-main: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
         }
-        * { cursor: default; }
+        * { cursor: default; box-sizing: border-box; }
         body { background: radial-gradient(circle at center, #111 0%, #000 100%); color: var(--text-main); font-family: var(--font-main); margin: 0; height: 100vh; overflow: hidden; display: flex; }
-        #sidebar { width: 260px; background: rgba(0,0,0,0.5); border-right: 1px solid var(--card-border); display: flex; flex-direction: column; padding: 30px; backdrop-filter: blur(10px); }
-        #main { flex: 1; padding: 40px; display: flex; flex-direction: column; }
+        
+        /* STATUS BAR */
+        .status-bar {
+            position: fixed; top: 0; right: 0; padding: 10px 20px;
+            display: flex; gap: 20px; align-items: center;
+            font-family: var(--font-mono); font-size: 0.7em; color: var(--text-dim);
+            z-index: 10;
+        }
+        .status-indicator {
+            width: 8px; height: 8px; background-color: var(--green);
+            border-radius: 50%; box-shadow: 0 0 10px var(--green);
+            animation: pulse 2s infinite; display: inline-block; margin-right: 8px;
+        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        #sidebar { width: 280px; background: rgba(0,0,0,0.6); border-right: 1px solid var(--card-border); display: flex; flex-direction: column; padding: 30px; backdrop-filter: blur(10px); }
+        #main { flex: 1; padding: 40px; display: flex; flex-direction: column; position: relative; }
+        
         .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-        .btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: 700; transition: 0.2s; text-transform: uppercase; font-size: 0.75em; letter-spacing: 1px; cursor: pointer; }
-        .btn:hover { filter: brightness(1.2); }
-        .btn-danger { background: var(--red); color: white; }
+        
+        .btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: 700; transition: 0.2s; text-transform: uppercase; font-size: 0.75em; letter-spacing: 1px; cursor: pointer; font-family: var(--font-mono); }
+        .btn:hover { filter: brightness(1.2); transform: translateY(-1px); }
+        .btn-danger { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--red); color: var(--red); }
         .btn-ghost { background: transparent; border: 1px solid var(--card-border); color: #ccc; }
         .btn-login { width: 100%; background: var(--accent); color: white; padding: 15px; font-size: 1em; }
         
-        .nav-item { padding: 12px; border-radius: 6px; margin-bottom: 5px; color: var(--text-dim); font-weight: 600; font-size: 0.9em; cursor: pointer; transition: 0.2s; }
-        .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
-        .nav-item.active { background: var(--accent); color: white; box-shadow: 0 0 15px var(--accent-glow); }
+        /* COOL CREATE BUTTON */
+        .btn-create {
+            background: linear-gradient(135deg, var(--accent), #6366f1);
+            color: white; border: none; padding: 12px 24px;
+            box-shadow: 0 0 20px var(--accent-glow);
+            font-weight: 800; border-radius: 8px;
+        }
+        .btn-create:hover { box-shadow: 0 0 30px var(--accent-glow); }
 
-        .search-bar { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); padding: 15px; border-radius: 8px; color: white; outline: none; box-sizing: border-box; }
-        .player-row, .backup-row { display: flex; align-items: center; justify-content: space-between; padding: 18px; margin-bottom: 8px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid transparent; }
-        .player-row:hover, .backup-row:hover { background: rgba(255,255,255,0.06); border-color: var(--accent); }
+        .nav-item { padding: 15px; border-radius: 8px; margin-bottom: 5px; color: var(--text-dim); font-weight: 600; font-size: 0.9em; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-item.active { background: rgba(139, 92, 246, 0.1); color: var(--accent); border-color: var(--accent); box-shadow: 0 0 15px rgba(139, 92, 246, 0.1); }
+
+        .search-bar { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); padding: 15px; border-radius: 8px; color: white; outline: none; }
+        .player-row, .backup-row { display: flex; align-items: center; justify-content: space-between; padding: 15px; margin-bottom: 8px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid transparent; transition: 0.2s; }
+        .player-row:hover, .backup-row:hover { background: rgba(255,255,255,0.04); border-color: var(--card-border); }
         
         #login { position: fixed; inset: 0; background: #000; z-index: 50; display: flex; justify-content: center; align-items: center; }
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         
-        /* Time Input */
         .time-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .time-box input { text-align: center; font-size: 1.2em; font-weight: bold; margin: 0; width: 100%; }
-        .time-label { text-align: center; font-size: 0.7em; color: var(--text-dim); margin-top: 5px; text-transform: uppercase; }
-
-        .stat-box { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; flex: 1; text-align: center; }
-        .stat-num { font-size: 1.5em; font-weight: 800; color: white; }
-        .stat-lbl { font-size: 0.7em; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+        .stat-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; flex: 1; text-align: center; border: 1px solid var(--card-border); }
+        .stat-num { font-size: 1.8em; font-weight: 800; color: white; margin-bottom: 5px; }
+        .stat-lbl { font-size: 0.7em; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
     </style>
 </head>
 <body>
+    <div class="status-bar">
+        <div>SERVER_LATENCY: <span id="ping">--</span>ms</div>
+        <div><span class="status-indicator"></span>SYSTEM ONLINE</div>
+    </div>
+
     <div id="login">
         <div class="card" style="width: 400px; text-align: center; border-top: 4px solid var(--accent);">
-            <h1>GORILLA <span style="color:var(--accent)">WARFARE</span></h1>
-            <p style="color: var(--text-dim); margin-bottom: 30px;">ADMINISTRATION</p>
-            <input type="text" id="api" value="https://sanctionbanepiconlineservicesystem.onrender.com" class="search-bar" placeholder="Server URL" style="margin-bottom:10px;">
-            <input type="password" id="pass" class="search-bar" placeholder="Access Key">
-            <button onclick="auth()" class="btn btn-login" style="margin-top:20px;">INITIALIZE</button>
-            <p id="msg" style="color:var(--red); margin-top:15px;"></p>
+            <h1 style="letter-spacing: -2px; margin-bottom: 5px;">GORILLA <span style="color:var(--accent)">WARFARE</span></h1>
+            <p style="color: var(--text-dim); margin-bottom: 30px; font-size: 0.8em; letter-spacing: 2px;">ADMINISTRATION CONSOLE</p>
+            <input type="text" id="api" value="https://sanctionbanepiconlineservicesystem.onrender.com" class="search-bar" placeholder="SERVER URL" style="margin-bottom:10px; font-family:var(--font-mono);">
+            <input type="password" id="pass" class="search-bar" placeholder="ACCESS KEY" style="font-family:var(--font-mono);">
+            <button onclick="auth()" class="btn btn-login" style="margin-top:20px;">INITIALIZE CONNECTION</button>
+            <p id="msg" style="color:var(--red); margin-top:15px; font-family:var(--font-mono); font-size: 0.8em;"></p>
         </div>
     </div>
 
     <div id="dashboard" style="display:none; width:100%; height:100%;">
         <div id="sidebar">
-            <h2 style="margin-bottom: 40px; color: white;">GW <span style="color:var(--accent)">PANEL</span></h2>
+            <h2 style="margin-bottom: 40px; color: white; letter-spacing: -1px;">GW <span style="color:var(--accent)">CMD</span></h2>
             <div class="nav-item active" onclick="switchTab('players')">PLAYER DATABASE</div>
             <div class="nav-item" onclick="switchTab('backups')">TIME MACHINE</div>
-            
-            <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--card-border);">
-                <div style="font-size: 0.8em; color: var(--text-dim);">SYSTEM STATUS</div>
-                <div style="color: var(--green); font-weight: bold; font-size: 0.9em; margin-top: 5px;">SECURE CONNECTION</div>
-            </div>
         </div>
 
         <div id="main">
             <div id="tab-players">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 25px; align-items: center;">
-                    <h1>Player Database</h1>
-                    <button onclick="refresh()" class="btn btn-ghost">REFRESH</button>
+                    <h1 style="font-size: 1.8em; letter-spacing: -1px;">Player Database</h1>
+                    <button onclick="refresh()" class="btn btn-ghost">REFRESH SIGNAL</button>
                 </div>
-                <input type="text" id="search" onkeyup="render()" class="search-bar" placeholder="Search Username or ID..." style="margin-bottom:20px;">
+                <input type="text" id="search" onkeyup="render()" class="search-bar" placeholder="SEARCH IDENTIFIER..." style="margin-bottom:20px; font-family:var(--font-mono);">
                 <div id="list" style="overflow-y: auto; flex: 1;"></div>
             </div>
 
             <div id="tab-backups" style="display:none;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 25px; align-items: center;">
-                    <h1>Time Machine (24 Hr Loop)</h1>
-                    <button onclick="createBackup()" class="btn btn-login" style="width:auto;">CREATE SNAPSHOT NOW</button>
+                    <h1 style="font-size: 1.8em; letter-spacing: -1px;">Time Machine (1m Loop)</h1>
+                    <button onclick="createBackup()" class="btn btn-create">CREATE SNAPSHOT NOW</button>
                 </div>
                 <div id="backup-list" style="overflow-y: auto; flex: 1;"></div>
             </div>
@@ -90,51 +113,53 @@
 
     <div id="modal" class="modal-overlay">
         <div class="card" style="width: 500px; border: 1px solid var(--red);">
-            <h2 style="color:var(--red);">SANCTION PLAYER</h2>
-            <div style="margin-bottom: 20px;">Target: <span id="m-target" style="font-weight:bold;"></span></div>
-            <div style="color: var(--accent); font-size: 0.8em; font-weight: bold;">BAN DURATION</div>
+            <h2 style="color:var(--red);">SANCTION TARGET</h2>
+            <div style="margin-bottom: 20px; font-family:var(--font-mono); color:var(--text-dim);">ID: <span id="m-target" style="color:white;"></span></div>
+            <div style="color: var(--accent); font-size: 0.8em; font-weight: bold; margin-bottom: 10px;">DURATION PARAMETERS</div>
             <div class="time-grid">
-                <div class="time-box"><input type="number" id="t-month" class="search-bar" placeholder="0"><div class="time-label">Months</div></div>
-                <div class="time-box"><input type="number" id="t-day" class="search-bar" placeholder="0"><div class="time-label">Days</div></div>
-                <div class="time-box"><input type="number" id="t-hour" class="search-bar" placeholder="0"><div class="time-label">Hours</div></div>
-                <div class="time-box"><input type="number" id="t-min" class="search-bar" placeholder="0"><div class="time-label">Mins</div></div>
+                <div class="time-box"><input type="number" id="t-month" class="search-bar" placeholder="0"></div>
+                <div class="time-box"><input type="number" id="t-day" class="search-bar" placeholder="0"></div>
+                <div class="time-box"><input type="number" id="t-hour" class="search-bar" placeholder="0"></div>
+                <div class="time-box"><input type="number" id="t-min" class="search-bar" placeholder="0"></div>
             </div>
-            <input type="text" id="m-reason" class="search-bar" placeholder="Reason" style="margin-bottom:20px;">
+            <input type="text" id="m-reason" class="search-bar" placeholder="VIOLATION REASON" style="margin-bottom:20px;">
             <div style="display: flex; gap: 15px;">
                 <button onclick="closeModal()" class="btn btn-ghost" style="flex:1;">CANCEL</button>
-                <button onclick="commitBan()" class="btn btn-danger" style="flex:1;">CONFIRM BAN</button>
+                <button onclick="commitBan()" class="btn btn-danger" style="flex:1;">EXECUTE BAN</button>
             </div>
         </div>
     </div>
 
     <div id="view-modal" class="modal-overlay">
-        <div class="card" style="width: 700px; height: 80vh; display: flex; flex-direction: column;">
+        <div class="card" style="width: 700px; height: 85vh; display: flex; flex-direction: column;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2>SNAPSHOT INSPECTOR</h2>
+                <h2>SNAPSHOT DATA</h2>
                 <button onclick="document.getElementById('view-modal').style.display='none'" class="btn btn-ghost">CLOSE</button>
             </div>
             
             <div style="display: flex; gap: 15px; margin-bottom: 20px;">
-                <div class="stat-box"><div class="stat-num" id="v-total">0</div><div class="stat-lbl">TOTAL PLAYERS</div></div>
-                <div class="stat-box" style="border: 1px solid var(--red);"><div class="stat-num" id="v-banned" style="color:var(--red);">0</div><div class="stat-lbl">BANNED</div></div>
-                <div class="stat-box" style="border: 1px solid var(--green);"><div class="stat-num" id="v-clean" style="color:var(--green);">0</div><div class="stat-lbl">CLEAN</div></div>
+                <div class="stat-box"><div class="stat-num" id="v-total">0</div><div class="stat-lbl">TOTAL</div></div>
+                <div class="stat-box" style="border-color: var(--red);"><div class="stat-num" id="v-banned" style="color:var(--red);">0</div><div class="stat-lbl">BANNED</div></div>
+                <div class="stat-box" style="border-color: var(--green);"><div class="stat-num" id="v-clean" style="color:var(--green);">0</div><div class="stat-lbl">CLEAN</div></div>
             </div>
 
-            <div style="font-size: 0.8em; color: var(--text-dim); margin-bottom: 10px;">PLAYERS IN THIS BACKUP:</div>
-            <div id="view-list" style="overflow-y: auto; flex: 1; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px;"></div>
+            <div id="view-list" style="overflow-y: auto; flex: 1; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; font-family:var(--font-mono); font-size: 0.9em;"></div>
 
-            <button id="v-restore-btn" class="btn btn-danger" style="margin-top: 20px; width: 100%;">RESTORE THIS SNAPSHOT</button>
+            <button id="v-restore-btn" class="btn btn-danger" style="margin-top: 20px; width: 100%;">RESTORE SNAPSHOT DATA</button>
         </div>
     </div>
 
     <script>
         let API="", TOKEN="", DB=[], SEL="";
 
+        // FAKE PING SIMULATOR
+        setInterval(() => { document.getElementById('ping').innerText = Math.floor(Math.random() * (45 - 20) + 20); }, 2000);
+
         async function auth() {
             let u = document.getElementById('api').value.replace(/\/$/,"");
             let p = document.getElementById('pass').value;
             let m = document.getElementById('msg');
-            m.innerText = "AUTHENTICATING...";
+            m.innerText = "ESTABLISHING UPLINK...";
             try {
                 let r = await fetch(u+'/api/players', {headers:{'x-admin-auth':p}});
                 if(!r.ok) throw "ACCESS DENIED";
@@ -142,7 +167,7 @@
                 document.getElementById('login').style.display='none';
                 document.getElementById('dashboard').style.display='flex';
                 render();
-            } catch(e) { m.innerText="CONNECTION FAILED"; }
+            } catch(e) { m.innerText="CONNECTION FAILED - CHECK CREDENTIALS"; }
         }
 
         function switchTab(tab) {
@@ -172,7 +197,7 @@
             let l=document.getElementById('list'), s=document.getElementById('search').value.toLowerCase();
             l.innerHTML="";
             DB.filter(p => (p.username||"").toLowerCase().includes(s) || p.productUserId.includes(s)).forEach(p => {
-                let badge = p.isBanned ? `<span style="color:var(--red); font-weight:bold;">BANNED</span>` : `<span style="color:var(--green); font-weight:bold;">CLEAN</span>`;
+                let badge = p.isBanned ? `<span style="color:var(--red); font-weight:bold;">BANNED</span>` : `<span style="color:var(--green); font-weight:bold;">ACTIVE</span>`;
                 let btn = p.isBanned ? `<button onclick="unban('${p.productUserId}')" class="btn btn-ghost">REVOKE</button>` : `<button onclick="openModal('${p.productUserId}','${p.username}')" class="btn btn-danger">BAN</button>`;
                 l.innerHTML += `
                     <div class="player-row">
@@ -185,41 +210,48 @@
             });
         }
 
-        // --- BACKUP LOGIC ---
         async function loadBackups() {
             let l = document.getElementById('backup-list');
-            l.innerHTML = "Loading...";
+            l.innerHTML = "<div style='padding:20px; color:#555;'>RETRIEVING DATA...</div>";
             try {
                 let r = await fetch(API+'/api/backups', {headers:{'x-admin-auth':TOKEN}});
                 let data = (await r.json()).backups;
                 l.innerHTML = "";
                 data.forEach(b => {
-                    let d = new Date(b.timestamp).toLocaleString();
+                    let d = new Date(b.timestamp).toLocaleTimeString();
                     l.innerHTML += `
                         <div class="backup-row">
                             <div>
-                                <div style="font-weight:bold; color:var(--accent);">SNAPSHOT</div>
+                                <div style="font-weight:bold; color:var(--accent);">AUTO-SAVE</div>
                                 <div style="font-family:monospace; color:var(--text-dim);">${d}</div>
                             </div>
-                            <div style="display:flex; gap:15px; align-items:center;">
-                                <div style="color:var(--red); font-weight:bold; font-size:0.8em;">BANNED: ${b.bannedCount||0}</div>
-                                <div style="color:var(--green); font-weight:bold; font-size:0.8em;">CLEAN: ${b.cleanCount||0}</div>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <div style="font-family:var(--font-mono); font-size:0.8em; margin-right:10px; color:#666;">PLAYERS: ${b.totalPlayers}</div>
                                 <button onclick="viewBackup('${b._id}')" class="btn btn-ghost">VIEW</button>
                                 <button onclick="restoreBackup('${b._id}')" class="btn btn-ghost" style="color:var(--accent); border-color:var(--accent);">RESTORE</button>
+                                <button onclick="deleteBackup('${b._id}')" class="btn btn-danger">DEL</button>
                             </div>
                         </div>`;
                 });
-            } catch(e) { l.innerHTML = "Error loading backups"; }
+            } catch(e) { l.innerHTML = "ERROR LOADING DATA"; }
         }
 
         async function createBackup() {
-            if(!confirm("Create a new snapshot right now?")) return;
+            let btn = document.querySelector('.btn-create');
+            btn.innerText = "PROCESSING...";
             await fetch(API+'/api/backups/create', {method:'POST', headers:{'x-admin-auth':TOKEN}});
+            btn.innerText = "CREATE SNAPSHOT NOW";
+            loadBackups();
+        }
+
+        async function deleteBackup(id) {
+            if(!confirm("CONFIRM DELETION? This cannot be undone.")) return;
+            await fetch(API+'/api/backups/'+id, {method:'DELETE', headers:{'x-admin-auth':TOKEN}});
             loadBackups();
         }
 
         async function viewBackup(id) {
-            document.getElementById('view-list').innerHTML = "Loading data...";
+            document.getElementById('view-list').innerHTML = "Loading...";
             document.getElementById('view-modal').style.display = 'flex';
             
             let r = await fetch(API+'/api/backups/'+id, {headers:{'x-admin-auth':TOKEN}});
@@ -231,18 +263,17 @@
                 document.getElementById('v-banned').innerText = b.bannedCount;
                 document.getElementById('v-clean').innerText = b.cleanCount;
                 
-                // Render List
                 let html = "";
                 b.data.forEach(p => {
                     let color = p.isBanned ? "var(--red)" : "var(--green)";
-                    let status = p.isBanned ? "BANNED" : "CLEAN";
+                    let status = p.isBanned ? "BANNED" : "OK";
                     html += `
                         <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid rgba(255,255,255,0.05);">
                             <div>
-                                <span style="font-weight:bold;">${p.username||"Unknown"}</span>
-                                <span style="color:#555; font-size:0.8em; margin-left:10px;">${p.productUserId}</span>
+                                <span style="font-weight:bold; color:#ccc;">${p.username||"Unknown"}</span>
+                                <span style="color:#444; margin-left:10px;">${p.productUserId}</span>
                             </div>
-                            <div style="color:${color}; font-weight:bold; font-size:0.8em;">${status}</div>
+                            <div style="color:${color}; font-weight:bold;">${status}</div>
                         </div>
                     `;
                 });
@@ -252,23 +283,23 @@
         }
 
         async function restoreBackup(id) {
-            if(!confirm("WARNING: RESTORING WILL OVERWRITE CURRENT DATA.\nAre you sure?")) return;
+            if(!confirm("WARNING: RESTORING WILL OVERWRITE CURRENT DATA.\nProceed?")) return;
             document.getElementById('view-modal').style.display='none';
             let r = await fetch(API+'/api/backups/restore/'+id, {method:'POST', headers:{'x-admin-auth':TOKEN}});
             let d = await r.json();
-            if(d.success) alert(`Restored ${d.count} players!`);
-            else alert("Error: " + d.error);
+            if(d.success) alert(`SUCCESS: Restored ${d.count} players.`);
+            else alert("ERROR: " + d.error);
         }
 
         // BAN LOGIC
-        function openModal(id, n) { SEL=id; document.getElementById('m-target').innerText=n; document.getElementById('modal').style.display='flex'; }
+        function openModal(id, n) { SEL=id; document.getElementById('m-target').innerText=id; document.getElementById('modal').style.display='flex'; }
         function closeModal() { document.getElementById('modal').style.display='none'; }
         async function commitBan() {
             let min = (parseInt(document.getElementById('t-month').value)||0)*43200 + (parseInt(document.getElementById('t-day').value)||0)*1440 + (parseInt(document.getElementById('t-hour').value)||0)*60 + (parseInt(document.getElementById('t-min').value)||0);
             await fetch(API+'/api/ban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:SEL, reason:document.getElementById('m-reason').value, durationMinutes:min})});
             closeModal(); refresh();
         }
-        async function unban(id) { if(confirm("Revoke?")) await fetch(API+'/api/unban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})}); refresh(); }
+        async function unban(id) { if(confirm("Revoke Sanction?")) await fetch(API+'/api/unban', {method:'POST', headers:{'Content-Type':'application/json','x-admin-auth':TOKEN}, body:JSON.stringify({productUserId:id})}); refresh(); }
     </script>
 </body>
 </html>
