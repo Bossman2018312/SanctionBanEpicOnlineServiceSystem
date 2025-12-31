@@ -3,17 +3,40 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
 const cron = require('node-cron');
+const rateLimit = require('express-rate-limit'); // NEW SECURITY TOOL
 
 const app = express();
+
+// --- SECURITY: RATE LIMITERS ---
+// 1. BLOCK BRUTE FORCE (Protects Login)
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Limit each IP to 10 login requests per window
+    message: { error: "⛔ TOO MANY ATTEMPTS. IP BLOCKED FOR 15 MINS." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// 2. BLOCK SPAM (Protects Database)
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 500, // Limit each IP to 500 requests per 15 mins
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 app.use(express.json());
 app.use(cors());
+
+// Apply limits to API routes
+app.use('/api/', apiLimiter); 
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
 
-let backupTask = null; // SINGLETON TIMER
+let backupTask = null;
 
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => {
@@ -40,8 +63,12 @@ const BackupSchema = new mongoose.Schema({
 });
 const Backup = mongoose.model('Backup', BackupSchema);
 
+// AUTH MIDDLEWARE (Now includes Login Limiter check implicitly via /api/ route)
 const verifyAdmin = (req, res, next) => {
-    if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) return res.status(403).json({ error: "Access Denied" });
+    if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) {
+        // Add a small delay to slow down hackers even more
+        return setTimeout(() => res.status(403).json({ error: "Access Denied" }), 500);
+    }
     next();
 };
 
@@ -56,12 +83,10 @@ app.get('/api/stats', verifyAdmin, async (req, res) => {
     });
 });
 
-// --- BACKUP SYSTEM (1 HOUR / 24 SLOTS) ---
+// --- BACKUP SYSTEM ---
 function startBackupSchedule() {
     if (backupTask) backupTask.stop();
     console.log("Time Machine Online (1-Hour Interval).");
-    
-    // Run at Minute 0 of every Hour (e.g. 1:00, 2:00, 3:00)
     backupTask = cron.schedule('0 * * * *', async () => {
         console.log("Creating Hourly Backup...");
         await createSnapshot("SNAPSHOT [AUTO]");
@@ -82,19 +107,22 @@ async function createSnapshot(customName) {
             bannedCount: banned, cleanCount: clean, data: players
         }).save();
 
-        // CLEANUP: Keep exactly 24 newest backups
-        const allBackups = await Backup.find().sort({ timestamp: -1 }); // Newest first
+        const allBackups = await Backup.find().sort({ timestamp: -1 });
         if (allBackups.length > 24) {
-            // Get the IDs of everything after the 24th item
             const toDelete = allBackups.slice(24).map(b => b._id);
             await Backup.deleteMany({ _id: { $in: toDelete } });
-            console.log(`Cycle complete. Deleted ${toDelete.length} old snapshots.`);
         }
-
     } catch (e) { console.error("Snapshot Failed:", e); }
 }
 
 // --- ROUTES ---
+
+// APPLY STRICTER LIMITER SPECIFICALLY TO LOGIN/CHECK ACTIONS
+app.get('/api/players', loginLimiter, verifyAdmin, async (req, res) => {
+    const players = await Player.find().sort({ lastSeen: -1 });
+    res.json({ success: true, players });
+});
+
 app.post('/api/backups/create', verifyAdmin, async (req, res) => {
     const { name } = req.body;
     await createSnapshot(name);
@@ -133,11 +161,6 @@ app.post('/api/backups/restore/:id', verifyAdmin, async (req, res) => {
 app.delete('/api/backups/:id', verifyAdmin, async (req, res) => {
     try { await Backup.findByIdAndDelete(req.params.id); res.json({ success: true }); } 
     catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.get('/api/players', verifyAdmin, async (req, res) => {
-    const players = await Player.find().sort({ lastSeen: -1 });
-    res.json({ success: true, players });
 });
 
 app.post('/api/players/track', async (req, res) => {
