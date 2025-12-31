@@ -4,8 +4,6 @@ const mongoose = require('mongoose');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
-
-// IMPORT THE BOT
 const { startBot, forceTestMessage } = require('./bot');
 
 const app = express();
@@ -18,53 +16,43 @@ const upload = multer({ dest: 'uploads/' });
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// --- NEW: FORCE BOT TEST LINK ---
-// URL: https://your-site.onrender.com/test-bot
+// --- TEST LINK ---
 app.get('/test-bot', async (req, res) => {
-    console.log("🖱️ Manually triggering bot test...");
+    console.log("🖱️ Triggering manual backup...");
     try {
-        await forceTestMessage();
-        res.send("<h1>✅ Command Sent! Check your Discord Channel.</h1>");
+        const result = await forceTestMessage();
+        res.send(`<h1>✅ Success!</h1><p>Backup sent to Discord. Players saved: ${result.count}</p>`);
     } catch (e) {
-        res.send(`<h1>❌ Error: ${e.message}</h1><p>Check Render Logs for details.</p>`);
+        res.send(`
+            <h1>❌ Failed</h1>
+            <p><b>Error:</b> ${e.message}</p>
+            <p>If it says "Bot not ready", wait 10 seconds and refresh.</p>
+        `);
     }
 });
 
 const PORT = process.env.PORT || 3000;
 
-// 1. START BOT IMMEDIATELY (Don't wait for DB)
-console.log("⚡ Starting Bot Process...");
-try {
-    startBot();
-} catch (e) { 
-    console.error("❌ CRITICAL: Bot failed to launch:", e); 
-}
-
-// 2. CONNECT TO DATABASE
-console.log("⏳ Connecting to MongoDB...");
+// CONNECT DB
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
-    .then(() => console.log("✅ MongoDB Connected"))
+    .then(() => {
+        console.log("✅ MongoDB Connected");
+        // START BOT ONLY AFTER DB IS READY (Safer)
+        startBot();
+    })
     .catch(err => console.error("❌ MongoDB Fail:", err));
 
-// --- SCHEMAS ---
 const PlayerSchema = new mongoose.Schema({
-    productUserId: String, 
-    playerId: String,      
-    username: String,
-    aliases: [String],
-    firstSeen: { type: Date, default: Date.now },
-    lastSeen: { type: Date, default: Date.now },
-    isBanned: { type: Boolean, default: false },
-    banReason: { type: String, default: "" },
-    banExpiresAt: { type: Date, default: null },
-    banCount: { type: Number, default: 0 },
-    sheckles: { type: Number, default: 0 },
-    scrap: { type: Number, default: 0 }
+    productUserId: String, playerId: String, username: String, aliases: [String],
+    firstSeen: { type: Date, default: Date.now }, lastSeen: { type: Date, default: Date.now },
+    isBanned: { type: Boolean, default: false }, banReason: { type: String, default: "" },
+    banExpiresAt: { type: Date, default: null }, banCount: { type: Number, default: 0 },
+    sheckles: { type: Number, default: 0 }, scrap: { type: Number, default: 0 }
 }, { strict: false }); 
 
 const Player = mongoose.model('Player', PlayerSchema);
 
-// --- AUTH ---
+// AUTH
 const verifyAdmin = (req, res, next) => {
     if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) return res.status(403).json({ error: "Access Denied" });
     next();
@@ -72,13 +60,10 @@ const verifyAdmin = (req, res, next) => {
 
 async function checkExpirations() {
     const now = new Date();
-    await Player.updateMany(
-        { isBanned: true, banExpiresAt: { $ne: null, $lte: now } },
-        { $set: { isBanned: false, banReason: "", banExpiresAt: null } }
-    );
+    await Player.updateMany({ isBanned: true, banExpiresAt: { $ne: null, $lte: now } }, { $set: { isBanned: false, banReason: "", banExpiresAt: null } });
 }
 
-// --- ROUTES ---
+// RESTORE
 app.post('/api/restore', verifyAdmin, upload.single('backupFile'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file" });
     try {
@@ -86,7 +71,6 @@ app.post('/api/restore', verifyAdmin, upload.single('backupFile'), async (req, r
         const fileContent = fs.readFileSync(filePath, 'utf-8');
         const players = JSON.parse(fileContent);
         if (!Array.isArray(players)) throw new Error("Invalid JSON");
-
         let count = 0;
         for (const p of players) {
             const pid = p.productUserId || p.playerId;
@@ -100,6 +84,7 @@ app.post('/api/restore', verifyAdmin, upload.single('backupFile'), async (req, r
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// API
 app.get('/api/players', verifyAdmin, async (req, res) => {
     await checkExpirations();
     const players = await Player.find().sort({ lastSeen: -1 });
