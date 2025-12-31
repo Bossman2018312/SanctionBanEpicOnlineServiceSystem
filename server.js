@@ -13,7 +13,7 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 const PORT = process.env.PORT || 3000;
 
-let backupTask = null; // PREVENTS DOUBLE TIMERS
+let backupTask = null; // SINGLETON TIMER
 
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => {
@@ -35,7 +35,7 @@ const Player = mongoose.model('Player', PlayerSchema);
 
 const BackupSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now },
-    name: { type: String, default: "SNAPSHOT [AUTO]" }, // NEW: Custom Name
+    name: { type: String, default: "SNAPSHOT [AUTO]" },
     totalPlayers: Number, bannedCount: Number, cleanCount: Number, data: Object 
 });
 const Backup = mongoose.model('Backup', BackupSchema);
@@ -56,15 +56,14 @@ app.get('/api/stats', verifyAdmin, async (req, res) => {
     });
 });
 
-// --- BACKUP SYSTEM (SINGLETON) ---
+// --- BACKUP SYSTEM (1 HOUR / 24 SLOTS) ---
 function startBackupSchedule() {
-    if (backupTask) backupTask.stop(); // Stop existing if any (Fixes duplicates)
+    if (backupTask) backupTask.stop();
+    console.log("Time Machine Online (1-Hour Interval).");
     
-    console.log("Time Machine Online.");
-    
-    // Run Every Minute
-    backupTask = cron.schedule('* * * * *', async () => {
-        console.log("Creating Minute Backup...");
+    // Run at Minute 0 of every Hour (e.g. 1:00, 2:00, 3:00)
+    backupTask = cron.schedule('0 * * * *', async () => {
+        console.log("Creating Hourly Backup...");
         await createSnapshot("SNAPSHOT [AUTO]");
     }, { scheduled: true, timezone: "America/New_York" });
 }
@@ -83,15 +82,21 @@ async function createSnapshot(customName) {
             bannedCount: banned, cleanCount: clean, data: players
         }).save();
 
-        // Cleanup old
-        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        await Backup.deleteMany({ timestamp: { $lt: cutoff } });
+        // CLEANUP: Keep exactly 24 newest backups
+        const allBackups = await Backup.find().sort({ timestamp: -1 }); // Newest first
+        if (allBackups.length > 24) {
+            // Get the IDs of everything after the 24th item
+            const toDelete = allBackups.slice(24).map(b => b._id);
+            await Backup.deleteMany({ _id: { $in: toDelete } });
+            console.log(`Cycle complete. Deleted ${toDelete.length} old snapshots.`);
+        }
+
     } catch (e) { console.error("Snapshot Failed:", e); }
 }
 
 // --- ROUTES ---
 app.post('/api/backups/create', verifyAdmin, async (req, res) => {
-    const { name } = req.body; // Read name from UI
+    const { name } = req.body;
     await createSnapshot(name);
     res.json({ success: true });
 });
