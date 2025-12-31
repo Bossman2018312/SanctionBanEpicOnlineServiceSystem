@@ -13,25 +13,23 @@
             --text: #ffffff; --dim: #666; --green: #10b981; --red: #ef4444;
             --font-ui: 'Inter', sans-serif; --font-code: 'JetBrains Mono', monospace;
         }
-        * { cursor: none; box-sizing: border-box; } /* HIDE DEFAULT CURSOR */
+        * { cursor: none; box-sizing: border-box; }
         body { 
             background: #000; color: var(--text); font-family: var(--font-ui); margin: 0; 
             height: 100vh; overflow: hidden; display: flex; flex-direction: column;
             background-image: radial-gradient(circle at 50% 50%, #111 0%, #000 100%);
         }
 
-        /* --- CUSTOM CURSOR --- */
         #cursor {
             position: fixed; width: 8px; height: 8px; background: white;
             border-radius: 50%; pointer-events: none; z-index: 9999;
             transform: translate(-50%, -50%); mix-blend-mode: difference;
             transition: width 0.1s, height 0.1s;
         }
-        button:hover ~ #cursor, .nav-item:hover ~ #cursor, .row-item:hover ~ #cursor {
+        button:hover ~ #cursor, .nav-item:hover ~ #cursor, .row-item:hover ~ #cursor, input:hover ~ #cursor {
             width: 20px; height: 20px; opacity: 0.5;
         }
 
-        /* --- TOP BAR --- */
         #telemetry {
             height: 40px; border-bottom: 1px solid var(--border);
             display: flex; align-items: center; justify-content: space-between;
@@ -48,7 +46,6 @@
         }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
-        /* --- LAYOUT --- */
         #workspace { display: flex; flex: 1; overflow: hidden; }
         #sidebar { 
             width: 260px; background: rgba(0,0,0,0.4); 
@@ -100,8 +97,8 @@
         }
         
         /* BLURRED LOGIN LINK */
-        #api-url { filter: blur(8px); transition: 0.3s; }
-        #api-url:hover, #api-url:focus { filter: none; }
+        #api-url { filter: blur(8px); transition: 0.3s; opacity: 0.6; }
+        #api-url:hover, #api-url:focus { filter: none; opacity: 1; }
 
         .integrity-container { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border); }
         .integrity-label { font-size: 0.7em; color: var(--dim); margin-bottom: 5px; display:flex; justify-content:space-between; }
@@ -125,7 +122,6 @@
         .stat-num { font-size: 1.8em; font-weight: 800; color: white; margin-bottom: 5px; }
         .stat-lbl { font-size: 0.7em; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; }
         
-        /* DATA TABLE IN MODAL */
         .data-table { width: 100%; font-size: 0.9em; border-collapse: collapse; color: #ccc; }
         .data-table td { padding: 8px; border-bottom: 1px solid #333; }
         .data-table td:first-child { color: var(--accent); font-weight: bold; width: 120px; }
@@ -142,7 +138,7 @@
         <div class="stat-group">
             <div class="stat-item">RAM: <span id="sys-ram" class="stat-val">0 MB</span></div>
             <div class="stat-item">PING: <span id="sys-ping" class="stat-val">-- ms</span></div>
-            <div class="stat-item" style="color:white; border-left:1px solid #333; padding-left:20px;" id="clock">00:00:00 EST</div>
+            <div class="stat-item" style="color:white; border-left:1px solid #333; padding-left:20px;" id="clock">12:00:00 AM EST</div>
         </div>
     </div>
 
@@ -183,7 +179,7 @@
 
             <div id="view-backups" style="display:none; height:100%; flex-direction:column;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-                    <h2>TIME MACHINE</h2>
+                    <h2>TIME MACHINE (24H LOOP)</h2>
                     <button onclick="createSnapshot()" class="btn btn-create">CREATE SNAPSHOT NOW</button>
                 </div>
                 <div id="list-backups" style="overflow-y:auto; flex:1; border:1px solid var(--border); border-radius:8px;"></div>
@@ -246,7 +242,6 @@
     </div>
 
     <script>
-        // CURSOR LOGIC
         const cursor = document.getElementById('cursor');
         document.addEventListener('mousemove', e => {
             cursor.style.left = e.clientX + 'px';
@@ -261,9 +256,15 @@
             if(KEY) fetchStats();
         }, 2000);
 
-        // CLOCK IN EST
+        // CLOCK: 12-Hour Format with AM/PM
         setInterval(() => { 
-            let date = new Date().toLocaleTimeString("en-US", {timeZone: "America/New_York", hour12: false});
+            let date = new Date().toLocaleTimeString("en-US", {
+                timeZone: "America/New_York",
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
             document.getElementById('clock').innerText = date + " EST"; 
         }, 1000);
 
@@ -376,7 +377,7 @@
                 let data = (await r.json()).backups;
                 l.innerHTML = "";
                 data.forEach(b => {
-                    let t = new Date(b.timestamp).toLocaleTimeString();
+                    let t = new Date(b.timestamp).toLocaleString("en-US", {hour:'numeric', minute:'2-digit', hour12:true});
                     l.innerHTML += `
                         <div class="row-item">
                             <div>
