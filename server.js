@@ -49,13 +49,13 @@ const verifyAdmin = (req, res, next) => {
     next();
 };
 
-// --- AUTOMATED BACKUP SYSTEM (24 HR LOOP) ---
+// --- AUTOMATED BACKUP SYSTEM (1 MINUTE LOOP) ---
 function startBackupSchedule() {
-    console.log("Time Machine System Online (24-Hour Retention).");
+    console.log("Time Machine System Online (1-Minute Interval).");
     
-    // Run Every Hour
-    cron.schedule('0 * * * *', async () => {
-        console.log("Creating Hourly Backup...");
+    // Run Every Minute (TESTING MODE)
+    cron.schedule('* * * * *', async () => {
+        console.log("Creating Minute Backup...");
         await createSnapshot();
     }, { scheduled: true, timezone: "America/New_York" });
 }
@@ -65,7 +65,6 @@ async function createSnapshot() {
         const players = await Player.find({}, { _id: 0, __v: 0 });
         if(players.length === 0) return;
 
-        // Calculate stats for the dashboard
         const banned = players.filter(p => p.isBanned).length;
         const clean = players.length - banned;
 
@@ -80,6 +79,7 @@ async function createSnapshot() {
         console.log(`Snapshot Saved! (${players.length} players)`);
 
         // CLEANUP: Delete anything older than 24 hours
+        // Since we run every minute, this list might get long, but MongoDB handles it fine.
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const result = await Backup.deleteMany({ timestamp: { $lt: cutoff } });
         
@@ -102,7 +102,7 @@ app.get('/api/backups', verifyAdmin, async (req, res) => {
     res.json({ success: true, backups });
 });
 
-// GET SINGLE BACKUP (For Viewing)
+// View Single Backup
 app.get('/api/backups/:id', verifyAdmin, async (req, res) => {
     try {
         const backup = await Backup.findById(req.params.id);
@@ -128,6 +128,14 @@ app.post('/api/backups/restore/:id', verifyAdmin, async (req, res) => {
             count++;
         }
         res.json({ success: true, count });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE BACKUP (NEW)
+app.delete('/api/backups/:id', verifyAdmin, async (req, res) => {
+    try {
+        await Backup.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
