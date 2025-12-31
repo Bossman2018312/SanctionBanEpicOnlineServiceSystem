@@ -5,28 +5,48 @@ const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 
+// IMPORT THE BOT
+const { startBot, forceTestMessage } = require('./bot');
+
 const app = express();
 app.use(express.json());
 app.use(cors());
 
 const upload = multer({ dest: 'uploads/' });
 
+// FORCE DASHBOARD
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
+// --- NEW: FORCE BOT TEST LINK ---
+// Click this in your browser to force a message: https://your-site.onrender.com/test-bot
+app.get('/test-bot', async (req, res) => {
+    console.log("🖱️ Manually triggering bot test...");
+    try {
+        await forceTestMessage();
+        res.send("<h1>✅ Command Sent! Check your Discord Channel.</h1>");
+    } catch (e) {
+        res.send(`<h1>❌ Error: ${e.message}</h1><p>Check Render Logs for details.</p>`);
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 
+// 1. START BOT IMMEDIATELY (Don't wait for DB)
+console.log("⚡ Starting Bot Process...");
+try {
+    startBot();
+} catch (e) { 
+    console.error("❌ CRITICAL: Bot failed to launch:", e); 
+}
+
+// 2. CONNECT TO DATABASE
+console.log("⏳ Connecting to MongoDB...");
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
-    .then(() => {
-        console.log("✅ MongoDB Connected");
-        // START BOT
-        try {
-            const { startBot } = require('./bot');
-            startBot();
-        } catch (e) { console.error("❌ Failed to load bot:", e); }
-    })
+    .then(() => console.log("✅ MongoDB Connected"))
     .catch(err => console.error("❌ MongoDB Fail:", err));
 
+// --- SCHEMAS ---
 const PlayerSchema = new mongoose.Schema({
     productUserId: String, 
     playerId: String,      
@@ -44,6 +64,7 @@ const PlayerSchema = new mongoose.Schema({
 
 const Player = mongoose.model('Player', PlayerSchema);
 
+// --- AUTH ---
 const verifyAdmin = (req, res, next) => {
     if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) return res.status(403).json({ error: "Access Denied" });
     next();
@@ -57,6 +78,7 @@ async function checkExpirations() {
     );
 }
 
+// --- ROUTES ---
 app.post('/api/restore', verifyAdmin, upload.single('backupFile'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file" });
     try {
