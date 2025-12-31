@@ -3,7 +3,6 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
 const cron = require('node-cron');
-const multer = require('multer');
 
 const app = express();
 app.use(express.json());
@@ -13,6 +12,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
+
+let backupTask = null; // PREVENTS DOUBLE TIMERS
 
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => {
@@ -34,37 +35,41 @@ const Player = mongoose.model('Player', PlayerSchema);
 
 const BackupSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now },
+    name: { type: String, default: "SNAPSHOT [AUTO]" }, // NEW: Custom Name
     totalPlayers: Number, bannedCount: Number, cleanCount: Number, data: Object 
 });
 const Backup = mongoose.model('Backup', BackupSchema);
 
-// --- AUTH ---
 const verifyAdmin = (req, res, next) => {
     if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) return res.status(403).json({ error: "Access Denied" });
     next();
 };
 
-// --- SYSTEM TELEMETRY (NEW) ---
 app.get('/api/stats', verifyAdmin, async (req, res) => {
     const uptime = process.uptime();
     const memory = process.memoryUsage();
     res.json({
         success: true,
         uptime: uptime,
-        ram: (memory.rss / 1024 / 1024).toFixed(2), // Convert to MB
+        ram: (memory.rss / 1024 / 1024).toFixed(2),
         status: mongoose.connection.readyState === 1 ? "OPERATIONAL" : "DB_ERROR"
     });
 });
 
-// --- BACKUP SYSTEM (1 MINUTE) ---
+// --- BACKUP SYSTEM (SINGLETON) ---
 function startBackupSchedule() {
+    if (backupTask) backupTask.stop(); // Stop existing if any (Fixes duplicates)
+    
     console.log("Time Machine Online.");
-    cron.schedule('* * * * *', async () => {
-        await createSnapshot();
+    
+    // Run Every Minute
+    backupTask = cron.schedule('* * * * *', async () => {
+        console.log("Creating Minute Backup...");
+        await createSnapshot("SNAPSHOT [AUTO]");
     }, { scheduled: true, timezone: "America/New_York" });
 }
 
-async function createSnapshot() {
+async function createSnapshot(customName) {
     try {
         const players = await Player.find({}, { _id: 0, __v: 0 });
         if(players.length === 0) return;
@@ -73,10 +78,12 @@ async function createSnapshot() {
         
         await new Backup({
             timestamp: new Date(),
+            name: customName || "SNAPSHOT [AUTO]",
             totalPlayers: players.length,
             bannedCount: banned, cleanCount: clean, data: players
         }).save();
 
+        // Cleanup old
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
         await Backup.deleteMany({ timestamp: { $lt: cutoff } });
     } catch (e) { console.error("Snapshot Failed:", e); }
@@ -84,7 +91,8 @@ async function createSnapshot() {
 
 // --- ROUTES ---
 app.post('/api/backups/create', verifyAdmin, async (req, res) => {
-    await createSnapshot();
+    const { name } = req.body; // Read name from UI
+    await createSnapshot(name);
     res.json({ success: true });
 });
 
