@@ -9,13 +9,11 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// FORCE DASHBOARD
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
 
-// CONNECT DB
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
     .then(() => {
         console.log("MongoDB Connected");
@@ -36,10 +34,7 @@ const Player = mongoose.model('Player', PlayerSchema);
 
 const BackupSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now },
-    totalPlayers: Number,
-    bannedCount: Number, 
-    cleanCount: Number,  
-    data: Object 
+    totalPlayers: Number, bannedCount: Number, cleanCount: Number, data: Object 
 });
 const Backup = mongoose.model('Backup', BackupSchema);
 
@@ -49,13 +44,22 @@ const verifyAdmin = (req, res, next) => {
     next();
 };
 
-// --- AUTOMATED BACKUP SYSTEM (1 MINUTE LOOP) ---
+// --- SYSTEM TELEMETRY (NEW) ---
+app.get('/api/stats', verifyAdmin, async (req, res) => {
+    const uptime = process.uptime();
+    const memory = process.memoryUsage();
+    res.json({
+        success: true,
+        uptime: uptime,
+        ram: (memory.rss / 1024 / 1024).toFixed(2), // Convert to MB
+        status: mongoose.connection.readyState === 1 ? "OPERATIONAL" : "DB_ERROR"
+    });
+});
+
+// --- BACKUP SYSTEM (1 MINUTE) ---
 function startBackupSchedule() {
-    console.log("Time Machine System Online (1-Minute Interval).");
-    
-    // Run Every Minute (TESTING MODE)
+    console.log("Time Machine Online.");
     cron.schedule('* * * * *', async () => {
-        console.log("Creating Minute Backup...");
         await createSnapshot();
     }, { scheduled: true, timezone: "America/New_York" });
 }
@@ -64,45 +68,31 @@ async function createSnapshot() {
     try {
         const players = await Player.find({}, { _id: 0, __v: 0 });
         if(players.length === 0) return;
-
         const banned = players.filter(p => p.isBanned).length;
         const clean = players.length - banned;
-
+        
         await new Backup({
             timestamp: new Date(),
             totalPlayers: players.length,
-            bannedCount: banned,
-            cleanCount: clean,
-            data: players
+            bannedCount: banned, cleanCount: clean, data: players
         }).save();
 
-        console.log(`Snapshot Saved! (${players.length} players)`);
-
-        // CLEANUP: Delete anything older than 24 hours
-        // Since we run every minute, this list might get long, but MongoDB handles it fine.
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const result = await Backup.deleteMany({ timestamp: { $lt: cutoff } });
-        
-        if (result.deletedCount > 0) console.log(`Deleted ${result.deletedCount} old backups.`);
-
+        await Backup.deleteMany({ timestamp: { $lt: cutoff } });
     } catch (e) { console.error("Snapshot Failed:", e); }
 }
 
-// --- API ROUTES ---
-
-// Create Manual Snapshot
+// --- ROUTES ---
 app.post('/api/backups/create', verifyAdmin, async (req, res) => {
     await createSnapshot();
     res.json({ success: true });
 });
 
-// List Backups (Metadata Only)
 app.get('/api/backups', verifyAdmin, async (req, res) => {
     const backups = await Backup.find({}, { data: 0 }).sort({ timestamp: -1 });
     res.json({ success: true, backups });
 });
 
-// View Single Backup
 app.get('/api/backups/:id', verifyAdmin, async (req, res) => {
     try {
         const backup = await Backup.findById(req.params.id);
@@ -111,15 +101,11 @@ app.get('/api/backups/:id', verifyAdmin, async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Restore Backup
 app.post('/api/backups/restore/:id', verifyAdmin, async (req, res) => {
     try {
         const snapshot = await Backup.findById(req.params.id);
         if (!snapshot) return res.status(404).json({ error: "Backup not found" });
-
         const players = snapshot.data;
-        if (!Array.isArray(players)) throw new Error("Corrupt Data");
-
         let count = 0;
         for (const p of players) {
             const pid = p.productUserId || p.playerId;
@@ -131,15 +117,11 @@ app.post('/api/backups/restore/:id', verifyAdmin, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// DELETE BACKUP (NEW)
 app.delete('/api/backups/:id', verifyAdmin, async (req, res) => {
-    try {
-        await Backup.findByIdAndDelete(req.params.id);
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    try { await Backup.findByIdAndDelete(req.params.id); res.json({ success: true }); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// [Standard Player Routes]
 app.get('/api/players', verifyAdmin, async (req, res) => {
     const players = await Player.find().sort({ lastSeen: -1 });
     res.json({ success: true, players });
@@ -149,7 +131,6 @@ app.post('/api/players/track', async (req, res) => {
     try {
         let { productUserId, username, sheckles, scrap } = req.body;
         if (!productUserId || productUserId.length < 5) return res.status(400).json({ error: "Invalid ID" });
-        
         const updateData = { lastSeen: new Date() };
         if (username && username !== "Checking..." && username !== "Unknown") {
             updateData.username = username;
@@ -157,12 +138,7 @@ app.post('/api/players/track', async (req, res) => {
         }
         if (sheckles !== undefined) updateData.sheckles = sheckles;
         if (scrap !== undefined) updateData.scrap = scrap;
-
-        const player = await Player.findOneAndUpdate(
-            { $or: [{ productUserId: productUserId }, { playerId: productUserId }] },
-            updateData,
-            { new: true, upsert: true, setDefaultsOnInsert: true }
-        );
+        const player = await Player.findOneAndUpdate({ $or: [{ productUserId: productUserId }, { playerId: productUserId }] }, updateData, { new: true, upsert: true, setDefaultsOnInsert: true });
         if (!player.productUserId) { player.productUserId = productUserId; await player.save(); }
         res.json({ success: true, isBanned: player.isBanned });
     } catch (err) { res.status(500).json({ error: err.message }); }
