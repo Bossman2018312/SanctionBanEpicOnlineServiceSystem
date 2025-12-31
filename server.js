@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // --- NEW: FORCE BOT TEST LINK ---
-// Click this in your browser to force a message: https://your-site.onrender.com/test-bot
+// URL: https://your-site.onrender.com/test-bot
 app.get('/test-bot', async (req, res) => {
     console.log("🖱️ Manually triggering bot test...");
     try {
