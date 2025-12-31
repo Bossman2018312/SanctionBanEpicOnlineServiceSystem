@@ -3,24 +3,26 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
 const cron = require('node-cron');
-const rateLimit = require('express-rate-limit'); // NEW SECURITY TOOL
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 
-// --- SECURITY: RATE LIMITERS ---
-// 1. BLOCK BRUTE FORCE (Protects Login)
+// --- CRITICAL FIX FOR RENDER IP DETECTION ---
+app.set('trust proxy', 1); 
+
+// --- SECURITY: LIGHTER LIMITERS ---
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Limit each IP to 10 login requests per window
-    message: { error: "⛔ TOO MANY ATTEMPTS. IP BLOCKED FOR 15 MINS." },
+    windowMs: 10 * 1000, // 10 Seconds
+    max: 5, // 5 Attempts allowed
+    message: { error: "⛔ COOLDOWN: WAIT 10 SECONDS." }, // Message when blocked
     standardHeaders: true,
     legacyHeaders: false,
 });
 
-// 2. BLOCK SPAM (Protects Database)
+// General API Spam Protection (Keep this higher so the site loads fast)
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500, // Limit each IP to 500 requests per 15 mins
+    windowMs: 60 * 1000, // 1 Minute
+    max: 200, 
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -28,7 +30,7 @@ const apiLimiter = rateLimit({
 app.use(express.json());
 app.use(cors());
 
-// Apply limits to API routes
+// Apply limits
 app.use('/api/', apiLimiter); 
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -63,11 +65,10 @@ const BackupSchema = new mongoose.Schema({
 });
 const Backup = mongoose.model('Backup', BackupSchema);
 
-// AUTH MIDDLEWARE (Now includes Login Limiter check implicitly via /api/ route)
+// AUTH MIDDLEWARE (Applies the 5-try limit here)
 const verifyAdmin = (req, res, next) => {
     if (req.headers['x-admin-auth'] !== process.env.ADMIN_PASSWORD) {
-        // Add a small delay to slow down hackers even more
-        return setTimeout(() => res.status(403).json({ error: "Access Denied" }), 500);
+        return res.status(403).json({ error: "Access Denied" });
     }
     next();
 };
@@ -83,7 +84,7 @@ app.get('/api/stats', verifyAdmin, async (req, res) => {
     });
 });
 
-// --- BACKUP SYSTEM ---
+// --- BACKUP SYSTEM (1 HOUR / 24 SLOTS) ---
 function startBackupSchedule() {
     if (backupTask) backupTask.stop();
     console.log("Time Machine Online (1-Hour Interval).");
@@ -117,7 +118,7 @@ async function createSnapshot(customName) {
 
 // --- ROUTES ---
 
-// APPLY STRICTER LIMITER SPECIFICALLY TO LOGIN/CHECK ACTIONS
+// APPLY LOGIN LIMITER TO PLAYER LIST (Since this is the first thing that loads on login)
 app.get('/api/players', loginLimiter, verifyAdmin, async (req, res) => {
     const players = await Player.find().sort({ lastSeen: -1 });
     res.json({ success: true, players });
