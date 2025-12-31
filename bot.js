@@ -3,74 +3,67 @@ const mongoose = require('mongoose');
 const cron = require('node-cron');
 
 // --- CONFIGURATION ---
-const CHANNEL_ID = "1455641113447633027"; // <--- YOUR NEW ID
+const CHANNEL_ID = "1455641113447633027"; // <--- YOUR ID
 // ---------------------
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 function startBot() {
-    console.log("🤖 [BOT] Initializing...");
-
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {
-        console.error("❌ [BOT CRITICAL] DISCORD_BOT_TOKEN is missing from Environment Variables!");
+        console.error("❌ [BOT] STOPPED: No DISCORD_BOT_TOKEN found in Environment.");
         return;
     }
 
-    client.once('ready', async () => {
+    client.once('ready', () => {
         console.log(`✅ [BOT] Online as ${client.user.tag}`);
         
-        // 1. TEST MESSAGE ON STARTUP
-        try {
-            const channel = await client.channels.fetch(CHANNEL_ID);
-            if (channel) {
-                console.log("✅ [BOT] Channel Found! Sending startup message...");
-                await channel.send("🟢 **SYSTEM ONLINE** - Bot has connected successfully.");
-            } else {
-                console.error("❌ [BOT] Could not find channel! Check ID or Bot Permissions.");
-            }
-        } catch (e) {
-            console.error("❌ [BOT] Error fetching channel on startup:", e.message);
-        }
-
-        // 2. SCHEDULE BACKUP (Every Minute)
-        cron.schedule('* * * * *', async () => {
-            console.log("⏳ [BOT] Starting 1-minute scheduled backup...");
-            await runBackup();
+        // Cron: Runs every minute
+        cron.schedule('* * * * *', () => {
+            console.log("⏳ [BOT] Auto-Backup Triggered...");
+            runBackup();
         }, { scheduled: true, timezone: "America/New_York" });
     });
 
     client.login(token).catch(err => {
-        console.error("❌ [BOT] Login Failed! Is the Token correct?", err.message);
+        console.error("❌ [BOT] Login Failed:", err.message);
     });
 }
 
+// Exported function for manual testing
 async function runBackup() {
+    if (!client.isReady()) {
+        console.error("⚠️ [BOT] Cannot backup: Bot is not ready yet.");
+        throw new Error("Bot not ready");
+    }
+
     try {
         const channel = await client.channels.fetch(CHANNEL_ID);
-        if (!channel) return console.error("❌ [BOT] Backup Failed: Channel not found.");
+        if (!channel) {
+            console.error(`❌ [BOT] Channel ${CHANNEL_ID} NOT FOUND!`);
+            throw new Error("Channel not found");
+        }
 
-        // Fetch data
         const Player = mongoose.model('Player');
         const players = await Player.find({}, { _id: 0, __v: 0 });
         
-        // Prepare File
         const jsonData = JSON.stringify(players, null, 2);
         const buffer = Buffer.from(jsonData, 'utf-8');
         const dateStr = new Date().toISOString().replace(/:/g, '-');
         const fileName = `GW_Backup_${dateStr}.json`;
 
-        // Send
         const attachment = new AttachmentBuilder(buffer, { name: fileName });
         await channel.send({ 
-            content: `🛡️ **DATABASE BACKUP**\n👥 Players Count: ${players.length}`, 
+            content: `🛡️ **MANUAL/AUTO BACKUP**\n👥 Players: ${players.length}`, 
             files: [attachment] 
         });
 
         console.log("✅ [BOT] Backup sent successfully!");
     } catch (err) {
         console.error("❌ [BOT] Backup Error:", err);
+        throw err; // Send error back to web browser
     }
 }
 
-module.exports = { startBot };
+// Export both functions
+module.exports = { startBot, forceTestMessage: runBackup };
