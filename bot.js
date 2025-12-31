@@ -3,23 +3,32 @@ const mongoose = require('mongoose');
 const cron = require('node-cron');
 
 // --- CONFIGURATION ---
-const CHANNEL_ID = "1455641113447633027"; // <--- YOUR ID
+const CHANNEL_ID = "1455641113447633027"; 
 // ---------------------
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+let isStarting = false;
 
 function startBot() {
+    if (isStarting) return; // Prevent double login
+    isStarting = true;
+
+    console.log("🤖 [BOT] Starting login process...");
+    
+    // SECURE: Get Token from Render Environment
     const token = process.env.DISCORD_BOT_TOKEN;
+
     if (!token) {
-        console.error("❌ [BOT] STOPPED: No DISCORD_BOT_TOKEN found in Environment.");
+        console.error("❌ [BOT CRITICAL] DISCORD_BOT_TOKEN is missing from Render Environment!");
         return;
     }
 
     client.once('ready', () => {
-        console.log(`✅ [BOT] Online as ${client.user.tag}`);
-        
-        // Cron: Runs every minute
-        cron.schedule('* * * * *', () => {
+        console.log(`✅ [BOT] Logged in as: ${client.user.tag}`);
+        console.log(`✅ [BOT] Status: READY TO BACKUP`);
+
+        // Schedule Daily Backup (11:59 PM)
+        cron.schedule('59 23 * * *', () => {
             console.log("⏳ [BOT] Auto-Backup Triggered...");
             runBackup();
         }, { scheduled: true, timezone: "America/New_York" });
@@ -30,19 +39,20 @@ function startBot() {
     });
 }
 
-// Exported function for manual testing
 async function runBackup() {
+    // 1. WAIT FOR BOT TO BE READY (Retry for 10 seconds)
     if (!client.isReady()) {
-        console.error("⚠️ [BOT] Cannot backup: Bot is not ready yet.");
-        throw new Error("Bot not ready");
+        console.log("⚠️ [BOT] Not ready yet... waiting 5 seconds...");
+        await new Promise(r => setTimeout(r, 5000));
+        
+        if (!client.isReady()) {
+            throw new Error("Bot failed to connect to Discord after waiting. Check Token.");
+        }
     }
 
     try {
         const channel = await client.channels.fetch(CHANNEL_ID);
-        if (!channel) {
-            console.error(`❌ [BOT] Channel ${CHANNEL_ID} NOT FOUND!`);
-            throw new Error("Channel not found");
-        }
+        if (!channel) throw new Error(`Channel ${CHANNEL_ID} not found.`);
 
         const Player = mongoose.model('Player');
         const players = await Player.find({}, { _id: 0, __v: 0 });
@@ -54,16 +64,17 @@ async function runBackup() {
 
         const attachment = new AttachmentBuilder(buffer, { name: fileName });
         await channel.send({ 
-            content: `🛡️ **MANUAL/AUTO BACKUP**\n👥 Players: ${players.length}`, 
+            content: `🛡️ **MANUAL BACKUP**\n👥 Players: ${players.length}`, 
             files: [attachment] 
         });
 
-        console.log("✅ [BOT] Backup sent successfully!");
+        console.log("✅ [BOT] Backup sent!");
+        return { success: true, count: players.length };
+
     } catch (err) {
-        console.error("❌ [BOT] Backup Error:", err);
-        throw err; // Send error back to web browser
+        console.error("❌ [BOT] Backup Error:", err.message);
+        throw err;
     }
 }
 
-// Export both functions
 module.exports = { startBot, forceTestMessage: runBackup };
