@@ -10,49 +10,62 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 let isStarting = false;
 
 function startBot() {
-    if (isStarting) return; // Prevent double login
+    if (isStarting) return;
     isStarting = true;
 
-    console.log("🤖 [BOT] Starting login process...");
+    console.log("🔍 [DIAGNOSTIC] Checking Environment Variables...");
     
-    // SECURE: Get Token from Render Environment
+    // 1. CHECK IF TOKEN EXISTS
     const token = process.env.DISCORD_BOT_TOKEN;
 
     if (!token) {
-        console.error("❌ [BOT CRITICAL] DISCORD_BOT_TOKEN is missing from Render Environment!");
+        console.error("❌ [CRITICAL] DISCORD_BOT_TOKEN is completely MISSING/UNDEFINED in Render.");
+        console.error("👉 Go to Render Dashboard -> Environment -> Add 'DISCORD_BOT_TOKEN'");
         return;
     }
 
-    client.once('ready', () => {
-        console.log(`✅ [BOT] Logged in as: ${client.user.tag}`);
-        console.log(`✅ [BOT] Status: READY TO BACKUP`);
+    // 2. CHECK TOKEN LENGTH & FORMAT (Safely)
+    console.log(`ℹ️ [DIAGNOSTIC] Token found! Length: ${token.length} characters.`);
+    if (token.length < 50) {
+        console.error("❌ [CRITICAL] Token looks too short! You might have copied the 'Public Key' or 'Client Secret'.");
+        console.error("👉 A real Bot Token is usually ~70 characters long.");
+        return;
+    }
+    console.log(`ℹ️ [DIAGNOSTIC] Token starts with: ${token.substring(0, 5)}...`);
 
-        // Schedule Daily Backup (11:59 PM)
+    // 3. ATTEMPT LOGIN
+    console.log("🤖 [BOT] Attempting to login...");
+    client.login(token)
+        .then(() => console.log("✅ [BOT] LOGIN SUCCESSFUL!"))
+        .catch(err => {
+            console.error("❌ [BOT] Login Failed. Discord rejected the token.");
+            console.error("👉 Error Details:", err.message);
+            if (err.code === 'TokenInvalid') {
+                console.error("👉 ACTION: Go to Discord Developer Portal -> Bot -> Reset Token -> Copy NEW Token -> Paste in Render.");
+            }
+        });
+
+    client.once('ready', () => {
+        console.log(`✅ [BOT] Online as ${client.user.tag}`);
+        // Schedule
         cron.schedule('59 23 * * *', () => {
             console.log("⏳ [BOT] Auto-Backup Triggered...");
             runBackup();
         }, { scheduled: true, timezone: "America/New_York" });
     });
-
-    client.login(token).catch(err => {
-        console.error("❌ [BOT] Login Failed:", err.message);
-    });
 }
 
 async function runBackup() {
-    // 1. WAIT FOR BOT TO BE READY (Retry for 10 seconds)
+    // Wait logic
     if (!client.isReady()) {
-        console.log("⚠️ [BOT] Not ready yet... waiting 5 seconds...");
-        await new Promise(r => setTimeout(r, 5000));
-        
-        if (!client.isReady()) {
-            throw new Error("Bot failed to connect to Discord after waiting. Check Token.");
-        }
+        console.log("⚠️ [BOT] Not ready... waiting 3 seconds...");
+        await new Promise(r => setTimeout(r, 3000));
+        if (!client.isReady()) throw new Error("Bot failed to connect. Check Render Logs for 'Login Failed'.");
     }
 
     try {
         const channel = await client.channels.fetch(CHANNEL_ID);
-        if (!channel) throw new Error(`Channel ${CHANNEL_ID} not found.`);
+        if (!channel) throw new Error(`Channel ${CHANNEL_ID} not found. Kick and re-invite bot.`);
 
         const Player = mongoose.model('Player');
         const players = await Player.find({}, { _id: 0, __v: 0 });
